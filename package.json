@@ -1,0 +1,40 @@
+{
+  "name": "@lhc/llm-wiki",
+  "version": "1.0.0",
+  "description": "",
+  "bin": {
+    "llm-wiki": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --clean",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "test": "tsx --test test/*.test.ts",
+    "version": "npx . -V"
+  },
+  "keywords": [],
+  "author": "lihaichao",
+  "license": "ISC",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.4",
+    "@types/turndown": "^5.0.6",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "chalk": "^6.0.1",
+    "commander": "^15.0.0",
+    "jsdom": "^30.1.1",
+    "ora": "^9.4.1",
+    "pdf-parse": "^2.4.5",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "yaml": "^2.9.1"
+  }
+}
