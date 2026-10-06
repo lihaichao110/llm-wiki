@@ -91,6 +91,10 @@ export class OpenAICompatibleProvider implements LlmProvider {
       messages,
     };
 
+    if (options?.temperature !== undefined) {
+      requestBody.temperature = options.temperature;
+    }
+
     if (options?.responseFormat === "json") {
       requestBody.response_format = {
         type: "json_object",

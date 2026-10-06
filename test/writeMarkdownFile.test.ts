@@ -4,7 +4,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { writeConceptFiles } from "../src/compile/writeConceptFile.ts";
-import { ExtractedConcept } from "../src/types/concept.ts";
+import { WikiConcept } from "../src/types/concept.ts";
 import { writeMarkdownFile } from "../src/utils/writeMarkdownFile.ts";
 import { parse } from "yaml";
 
@@ -22,16 +22,27 @@ const parseFrontmatter = (markdown: string): Record<string, unknown> => {
 };
 
 /** 创建用于验证概念写入行为的最小完整概念。 */
-const createConcept = (summary: string): ExtractedConcept => ({
+const createConcept = (summary: string): WikiConcept => ({
   name: "工作量证明",
   aliases: ["PoW"],
   summary,
   tags: ["共识机制"],
   confidence: 0.95,
   keyPoints: [],
-  content: "",
+  content: "工作量证明正文。",
   relatedConcepts: [],
-  evidence: [],
+  sources: ["bitcoin.md", "paper.md"],
+  evidence: [
+    {
+      sourceFileName: "paper.md",
+      text: "proof-of-work",
+      startLine: 2,
+      endLine: 3,
+    },
+  ],
+  modelId: "test-model",
+  createdAt: "2026-10-04T00:00:00.000Z",
+  updatedAt: "2026-10-06T00:00:00.000Z",
 });
 
 test("概念文件使用 sources 数组且不要求单数 source", async () => {
@@ -40,12 +51,6 @@ test("概念文件使用 sources 数组且不要求单数 source", async () => {
   try {
     await writeConceptFiles(
       [createConcept("第一版摘要")],
-      {
-        sourceFileName: "bitcoin.md",
-        modelId: "test-model",
-        createdAt: "2026-10-04T00:00:00.000Z",
-        updatedAt: "2026-10-04T00:00:00.000Z",
-      },
       directory,
     );
 
@@ -55,8 +60,9 @@ test("概念文件使用 sources 数组且不要求单数 source", async () => {
     );
     const frontmatter = parseFrontmatter(markdown);
 
-    assert.deepEqual(frontmatter.sources, ["bitcoin.md"]);
+    assert.deepEqual(frontmatter.sources, ["bitcoin.md", "paper.md"]);
     assert.equal("source" in frontmatter, false);
+    assert.match(markdown, /\[\[paper\.md:2-3\]\]/);
   } finally {
     await rm(path.join(process.cwd(), directory), { recursive: true, force: true });
   }

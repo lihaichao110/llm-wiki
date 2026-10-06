@@ -47,6 +47,64 @@ export interface ExtractedConcept {
 }
 
 /**
+ * 一篇 source 对某个概念的提取结果。
+ *
+ * 该结构只在单次编译期间使用，为后续跨 source 合并概念保留来源上下文。
+ */
+export interface ConceptCandidate {
+  /** 模型从当前 source 中提取出的概念。 */
+  concept: ExtractedConcept;
+
+  /** source 相对于 `sources` 目录的路径。 */
+  sourceFileName: string;
+
+  /** 执行概念提取时使用的模型。 */
+  modelId: string;
+
+  /** 本轮编译提取概念的时间。 */
+  extractedAt: string;
+}
+
+/**
+ * 规范化名称相同的一组概念候选。
+ */
+export interface ConceptCandidateGroup {
+  /** 由概念名称生成的稳定分组键。 */
+  normalizedName: string;
+
+  /** 按 source 处理顺序保存的候选，始终为平坦数组。 */
+  candidates: ConceptCandidate[];
+}
+
+/**
+ * 最终 Wiki 页面使用的原文证据。
+ */
+export interface WikiConceptEvidence extends ConceptEvidence {
+  /** 该证据所属的 source 文件。 */
+  sourceFileName: string;
+}
+
+/**
+ * 完成跨来源综合、可以直接写入 Wiki 的概念。
+ */
+export interface WikiConcept extends Omit<ExtractedConcept, "evidence"> {
+  /** 支撑当前概念的全部 source 文件，按首次出现顺序排列。 */
+  sources: string[];
+
+  /** 带 source 上下文的证据，避免跨来源合并后丢失定位信息。 */
+  evidence: WikiConceptEvidence[];
+
+  /** 生成当前页面内容所使用的模型。 */
+  modelId: string;
+
+  /** 页面首次创建时间。 */
+  createdAt: string;
+
+  /** 页面最近一次编译时间。 */
+  updatedAt: string;
+}
+
+/**
  * 文章配置
  */
 export interface ConceptMarkdownOptions {
@@ -68,5 +126,5 @@ export interface ConceptMarkdownOptions {
  */
 export interface ConceptExtractionResult {
   concepts: ExtractedConcept[];
-  options: ConceptMarkdownOptions
+  options: ConceptMarkdownOptions;
 }

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
-import { extractConceptsFromDocument } from "../src/compile/extractConcept.ts";
+import {
+  extractAllConcepts,
+  extractConceptsFromDocument,
+} from "../src/compile/extractConcept.ts";
 import type {
   LlmGenerateOptions,
   LlmProvider,
@@ -92,6 +96,7 @@ test("完成一篇 source 文档的概念提取流程", async () => {
   );
 
   assert.equal(provider.receivedOptions?.responseFormat, "json");
+  assert.equal(provider.receivedOptions?.temperature, 0);
 });
 
 test("模型返回无效数据时拒绝概念提取结果", async () => {
@@ -109,5 +114,78 @@ test("模型返回无效数据时拒绝概念提取结果", async () => {
         markdownOptions
       ),
     /概念提取结果不是有效 JSON/,
+  );
+});
+
+test("按指定并发量提取全部概念并保持文档顺序", async () => {
+  /** 当前正在执行的模型请求数量。 */
+  let activeRequests = 0;
+  /** 测试期间观测到的最大并发请求数量。 */
+  let maximumActiveRequests = 0;
+
+  const provider: LlmProvider = {
+    async generateText(messages) {
+      activeRequests += 1;
+      maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests);
+
+      const sourceName = messages[1].content.match(/document-(\d+)/)?.[1] ?? "unknown";
+      // 让靠前文档更晚完成，验证返回顺序不受请求完成顺序影响。
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, sourceName === "0" ? 20 : 5));
+      activeRequests -= 1;
+
+      return JSON.stringify({
+        concepts: [
+          {
+            name: `Concept ${sourceName}`,
+            aliases: [],
+            summary: `Summary ${sourceName}`,
+            tags: [],
+            confidence: 1,
+            content: `Content ${sourceName}`,
+            keyPoints: [],
+            relatedConcepts: [],
+            evidence: [],
+          },
+        ],
+      });
+    },
+  };
+
+  const documents: SourceDocument[] = [0, 1, 2].map((index) => ({
+    filePath: path.resolve(process.cwd(), "sources", `document-${index}.md`),
+    frontmatter: {
+      title: `Document ${index}`,
+      source: `https://example.com/${index}`,
+      sourceType: SourceTypeEnum.Web,
+    },
+    content: `document-${index}`,
+  }));
+
+  const candidates = await extractAllConcepts(documents, provider, {
+    concurrency: 2,
+    modelId: "test-model",
+    extractedAt: "2026-10-06T00:00:00.000Z",
+  });
+
+  assert.equal(maximumActiveRequests, 2);
+  assert.deepEqual(
+    candidates.map((candidate) => candidate.concept.name),
+    ["Concept 0", "Concept 1", "Concept 2"],
+  );
+  assert.deepEqual(
+    candidates.map((candidate) => candidate.sourceFileName),
+    ["document-0.md", "document-1.md", "document-2.md"],
+  );
+});
+
+test("拒绝无效的批量提取并发量", async () => {
+  const provider = new MockLlmProvider();
+
+  await assert.rejects(
+    extractAllConcepts([], provider, {
+      concurrency: 0,
+      modelId: "test-model",
+    }),
+    /并行提取数量必须是大于等于 1 的安全整数/,
   );
 });

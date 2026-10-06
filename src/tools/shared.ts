@@ -1,3 +1,4 @@
+import { normalizeConceptName } from "@/utils/name";
 import path from "path";
 
 export enum SourceTypeEnum {
@@ -37,5 +38,5 @@ export const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
  */
 export function titleFromFilename(filePath: string): string {
   const basename = path.basename(filePath, path.extname(filePath));
-  return basename.replace(/[-_]+/g, " ").trim();
+  return normalizeConceptName(basename)
 }

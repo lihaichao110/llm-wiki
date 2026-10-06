@@ -55,6 +55,7 @@ test("向 OpenAI 兼容接口发送消息并返回文本", async () => {
     ],
     {
       responseFormat: "json",
+      temperature: 0,
     },
   );
 
@@ -71,6 +72,7 @@ test("向 OpenAI 兼容接口发送消息并返回文本", async () => {
   );
 
   assert.equal(requestedBody?.model, "test-model");
+  assert.equal(requestedBody?.temperature, 0);
 
   assert.deepEqual(requestedBody?.response_format, {
     type: "json_object",

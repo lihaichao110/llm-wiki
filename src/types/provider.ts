@@ -5,6 +5,13 @@ import type { LlmMessage } from "@/types/llm";
  */
 export interface LlmGenerateOptions {
   /**
+   * 模型生成时使用的采样温度。
+   *
+   * 数值越低，模型输出通常越稳定；具体取值范围由 Provider 决定。
+   */
+  temperature?: number;
+
+  /**
    * 希望模型返回的数据格式。
    *
    * provider 可以根据这个配置启用对应厂商的 JSON 输出功能。

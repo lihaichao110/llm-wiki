@@ -1,39 +1,23 @@
-import { ConceptMarkdownOptions, ExtractedConcept } from "@/types/concept";
+import { WikiConcept } from "@/types/concept";
 import { writeMarkdownFile } from "@/utils/writeMarkdownFile";
 
 /**
- * 将概念名称转换为安全的 Markdown 文件名。
- */
-function createConceptFileName(name: string): string {
-  const safeName = name
-    .trim()
-    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-")
-    .replace(/\s+/g, "-")
-    .replace(/\.+$/g, "");
-
-  return `${safeName || "未命名概念"}.md`;
-}
-
-/**
- * 把概念转换为 Wiki Markdown。
+ * 把最终概念转换为 Wiki Markdown。
  *
- * sources 使用数组为后续合并多个来源预留空间；当前每次编译只写入本次来源。
- *
- * @param concept - 从 source 文档提取出的概念。
- * @param options - 概念来源、模型和时间信息。
+ * @param concept 已完成跨来源综合的概念。
  * @returns 可直接交给 Markdown 写入器的 Frontmatter 与正文。
  */
-function createConceptMarkdown(concept: ExtractedConcept, options: ConceptMarkdownOptions) {
+export function createConceptMarkdown(concept: WikiConcept) {
   const frontmatter = {
     title: concept.name,
     summary: concept.summary,
-    sources: [options.sourceFileName],
-    createdAt: options.createdAt,
-    updatedAt: options.updatedAt,
+    sources: concept.sources,
+    createdAt: concept.createdAt,
+    updatedAt: concept.updatedAt,
     tags: concept.tags,
     aliases: concept.aliases,
     confidence: concept.confidence,
-    modelId: options.modelId,
+    modelId: concept.modelId,
   };
 
   const relatedConcepts = concept.relatedConcepts.length > 0
@@ -43,13 +27,15 @@ function createConceptMarkdown(concept: ExtractedConcept, options: ConceptMarkdo
     : "暂无相关概念。";
 
   const evidence = concept.evidence.length > 0
-    ? concept.evidence?.map(opt => (`- [[${options.sourceFileName}:${opt.startLine}-${opt.endLine}]]\n`))
-    : ''
+    ? concept.evidence
+      .map(({ sourceFileName, startLine, endLine }) =>
+        `- [[${sourceFileName}:${startLine}-${endLine}]]`)
+      .join("\n")
+    : "暂无原文证据。";
 
   return {
     frontmatter,
-    content: `
-# ${concept.name}
+    content: `# ${concept.name}
 
 ${concept.content}
 
@@ -60,25 +46,26 @@ ${relatedConcepts}
 ## 原文证据
 
 ${evidence}
-`
-  }
+`,
+  };
 }
 
 /**
- * 将提取出的概念分别写入 wiki/concepts 目录。
+ * 将最终概念分别写入指定目录。
  *
- * 同名概念沿用通用的来源保护逻辑，后续再实现跨来源的概念合并。
+ * 文件名清理由通用 Markdown 写入器统一处理，避免不同编译阶段产生不同文件名。
+ *
+ * @param concepts 已完成综合的概念列表。
+ * @param outputDirectory 相对于当前工作目录的输出目录。
  */
 export async function writeConceptFiles(
-  concepts: readonly ExtractedConcept[],
-  options: ConceptMarkdownOptions,
+  concepts: readonly WikiConcept[],
   outputDirectory = "wiki/concepts",
 ): Promise<void> {
   for (const concept of concepts) {
-    const fileName = createConceptFileName(concept.name);
-    const { frontmatter, content } = createConceptMarkdown(concept, options);
+    const { frontmatter, content } = createConceptMarkdown(concept);
 
-    await writeMarkdownFile(fileName, content, {
+    await writeMarkdownFile(concept.name, content, {
       directory: outputDirectory,
       frontmatter,
     });

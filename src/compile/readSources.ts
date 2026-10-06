@@ -1,5 +1,10 @@
 import { readdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
+import chalk from "chalk";
+import { parseSourceFile } from "./parseSourceFile";
+import { SourceDocument } from "@/types/document";
+import { loadCompileState } from "./comparisonCompileState";
+import { extractFilePath } from "@/utils/name";
 
 /**
  * 递归查找目录中的 Markdown 文件。
@@ -57,4 +62,45 @@ export async function readSourceFiles(
 
     throw error;
   }
+}
+
+/**
+ * 解析 `sources` 目录中的全部 Markdown 文档。
+ *
+ * 全量 Wiki 编译依赖所有 source 的概念，因此这里不会根据历史哈希跳过未变化文件。
+ *
+ * @returns 成功解析的全部 source 文档。
+ */
+export async function readAllDocuments(): Promise<SourceDocument[]> {
+  const sourceFilesList: SourceDocument[] = [];
+
+  const sourceFiles = await readSourceFiles('sources');
+
+  if (sourceFiles.length === 0) {
+    console.log(chalk.red("sources 目录中没有找到 Markdown 文件。"));
+    return []
+  }
+
+  console.log(chalk.blueBright(`识别到的可编译文件：\n${sourceFiles.join('\n')}`))
+  console.log(chalk.greenBright(`共找到 ${sourceFiles.length} 个 Markdown 文件：`));
+
+  for (const sourceFile of sourceFiles) {
+    const document = await parseSourceFile(sourceFile);
+    const displayPath = extractFilePath(sourceFile)
+    if (!document) {
+      console.log(chalk.redBright(`❌ ${displayPath} 文件处理失败`));
+      continue
+    }
+
+    try {
+      loadCompileState(document)
+    } catch {
+      console.log(chalk.yellow(`⚠️ ${displayPath} 文件已编译，跳过编译！`));
+      continue
+    }
+
+    sourceFilesList.push(document);
+  }
+
+  return sourceFilesList;
 }
