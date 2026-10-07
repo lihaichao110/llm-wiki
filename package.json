@@ -1,7 +1,7 @@
 {
-  "name": "@lhc/llm-wiki",
+  "name": "@lihaichao/llm-wiki",
   "version": "1.0.0",
-  "description": "",
+  "description": "将网页和 PDF 整理为可由大语言模型编译的结构化 Wiki",
   "bin": {
     "llm-wiki": "dist/index.js"
   },
@@ -9,11 +9,36 @@
     "build": "tsup src/index.ts --format esm --clean",
     "dev": "tsup src/index.ts --format esm --watch",
     "test": "tsx --test test/*.test.ts",
-    "version": "npx . -V"
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test",
+    "release": "git push origin main --follow-tags",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check"
   },
-  "keywords": [],
+  "keywords": [
+    "llm",
+    "wiki",
+    "markdown",
+    "pdf",
+    "cli"
+  ],
   "author": "lihaichao",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lihaichao110/llm-wiki.git"
+  },
+  "homepage": "https://github.com/lihaichao110/llm-wiki#readme",
+  "bugs": {
+    "url": "https://github.com/lihaichao110/llm-wiki/issues"
+  },
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "files": [
     "dist"
   ],

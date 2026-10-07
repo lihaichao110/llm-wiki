@@ -1,0 +1,56 @@
+name: 发布 npm 包
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v6
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org/
+          package-manager-cache: false
+
+      - name: 检查 npm 版本
+        id: npm
+        shell: bash
+        run: |
+          package="$(node -p "require('./package.json').name + '@' + require('./package.json').version")"
+          if npm view "${package}" version >/dev/null 2>&1; then
+            echo "${package} 已发布，跳过 npm 发布。"
+            echo "published=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "${package} 尚未发布。"
+            echo "published=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: 安装依赖
+        if: steps.npm.outputs.published == 'false'
+        run: npm install
+
+      - name: 发布到 npm
+        if: steps.npm.outputs.published == 'false'
+        run: npm publish
+
+      - name: 创建 GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "GitHub Release ${GITHUB_REF_NAME} 已存在，跳过创建。"
+          else
+            gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes --title "${GITHUB_REF_NAME}"
+          fi

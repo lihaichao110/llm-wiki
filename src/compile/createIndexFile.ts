@@ -15,7 +15,7 @@ ${data}
 ${concept?.length} pages | Generated ${new Date().toISOString()}
 `
   try {
-    const filePath = path.join(__dirname, 'wiki/index.md')
+    const filePath = path.resolve(process.cwd(), "wiki/index.md");
     await writeFile(filePath, article, 'utf8')
   } catch { }
 }
