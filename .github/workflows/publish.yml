@@ -38,7 +38,11 @@ jobs:
 
       - name: 安装依赖
         if: steps.npm.outputs.published == 'false'
-        run: npm install
+        run: npm ci
+
+      - name: 构建发布产物
+        if: steps.npm.outputs.published == 'false'
+        run: npm run build
 
       - name: 发布到 npm
         if: steps.npm.outputs.published == 'false'
