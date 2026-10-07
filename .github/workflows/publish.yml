@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   publish:
@@ -44,9 +43,11 @@ jobs:
         if: steps.npm.outputs.published == 'false'
         run: npm run build
 
-      - name: 发布到 npm
+      - name: 提交 npm 待审核版本
         if: steps.npm.outputs.published == 'false'
-        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm stage publish
 
       - name: 创建 GitHub Release
         shell: bash
