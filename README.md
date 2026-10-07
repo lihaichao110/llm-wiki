@@ -54,8 +54,6 @@ llm-wiki --help
 ```bash
 nvm use
 npm ci
-npm run check
-npm run build
 ```
 
 ## 发布
