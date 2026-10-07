@@ -1,6 +1,6 @@
 {
   "name": "@lihaichao/llm-wiki",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "将网页和 PDF 整理为可由大语言模型编译的结构化 Wiki",
   "bin": {
     "llm-wiki": "dist/index.js"
