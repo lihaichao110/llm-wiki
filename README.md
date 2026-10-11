@@ -44,6 +44,7 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 | `llm-wiki compile --concurrency <数量>` | 编译资料，并设置同时处理的任务数量。 |
 | `llm-wiki vector` | 为 `wiki/concepts/` 中的内容生成向量，保存到 `.llmwiki/embedding.json`。 |
 | `llm-wiki --help` | 查看命令帮助。 |
+| `llm-wiki --version`、`llm-wiki -V` | 查看当前版本。 |
 
 将网页或在线 PDF 转换为 Markdown：
 
