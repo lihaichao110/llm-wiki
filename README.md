@@ -23,9 +23,27 @@ export LLM_API_KEY="<API Key>"
 export LLM_BASE_URL="<兼容接口地址>"
 ```
 
+运行向量化命令还需要配置 OpenRouter Inference Token：
+
+```bash
+export OPENROUTER_API_KEY="<OpenRouter Access Token>"
+```
+
+该 Token 需要具备 Inference 权限。向量命令使用 OpenRouter 上的 `baai/bge-m3` 模型。
+
 不要将真实的 API Key 写入 README、代码或提交历史。
 
 ## 使用
+
+### 命令一览
+
+| 命令 | 作用 |
+| --- | --- |
+| `llm-wiki start <url>` | 抓取网页或在线 PDF，并保存为 Markdown。 |
+| `llm-wiki compile` | 将 `sources/` 中的 Markdown 资料整理为 `wiki/` 下的 Wiki 内容。 |
+| `llm-wiki compile --concurrency <数量>` | 编译资料，并设置同时处理的任务数量。 |
+| `llm-wiki vector` | 为 `wiki/concepts/` 中的内容生成向量，保存到 `.llmwiki/embedding.json`。 |
+| `llm-wiki --help` | 查看命令帮助。 |
 
 将网页或在线 PDF 转换为 Markdown：
 
@@ -40,6 +58,14 @@ llm-wiki start https://bitcoin.org/bitcoin.pdf
 llm-wiki compile
 llm-wiki compile --concurrency 3
 ```
+
+为 `wiki/concepts/` 中的 Markdown 文件生成向量，并保存到 `.llmwiki/embedding.json`：
+
+```bash
+llm-wiki vector
+```
+
+运行前请先生成 `wiki/concepts/` 内容，并配置 `OPENROUTER_API_KEY`。每个文件处理完成后会汇总写入向量记录；没有可处理的 Markdown 文件时会提示并结束。
 
 查看所有可用命令：
 
