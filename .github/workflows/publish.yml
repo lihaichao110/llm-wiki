@@ -20,7 +20,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           registry-url: https://registry.npmjs.org/
-          package-manager-cache: false
+          cache: pnpm
+
+      - name: 配置 pnpm
+        uses: pnpm/action-setup@v4
 
       - name: 检查 npm 版本
         id: npm
@@ -37,11 +40,11 @@ jobs:
 
       - name: 安装依赖
         if: steps.npm.outputs.published == 'false'
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: 构建发布产物
         if: steps.npm.outputs.published == 'false'
-        run: npm run build
+        run: pnpm run build
 
       - name: 提交 npm 待审核版本
         if: steps.npm.outputs.published == 'false'

@@ -2,10 +2,10 @@
 
 ## 构建、测试与开发命令
 
-- `npm ci`：根据 `package-lock.json` 安装确定版本的依赖。
-- `npm run dev`：以监听模式运行 `tsup`，源码变更后自动重新构建。
-- `npm run build`：清理并将 `src/index.ts` 打包为 `dist/` 下的 ESM 文件。
-- `npx tsc --noEmit`：执行严格的 TypeScript 类型检查，不生成文件。
+- `pnpm install --frozen-lockfile`：根据 `pnpm-lock.yaml` 安装确定版本的依赖。
+- `pnpm run dev`：以监听模式运行 `tsup`，源码变更后自动重新构建。
+- `pnpm run build`：清理并将 `src/index.ts` 打包为 `dist/` 下的 ESM 文件。
+- `pnpm exec tsc --noEmit`：执行严格的 TypeScript 类型检查，不生成文件。
 - `node dist/index.js start <url>`：使用指定网页地址手动验证构建后的 CLI。
 
 如果仓库中存在 `.nvmrc`，执行 Node.js 或前端相关命令前必须先运行 `nvm use`。

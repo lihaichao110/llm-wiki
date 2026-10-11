@@ -79,7 +79,7 @@ llm-wiki --help
 
 ```bash
 nvm use
-npm ci
+pnpm install --frozen-lockfile
 ```
 
 ## 发布
@@ -90,7 +90,7 @@ npm ci
 npm login
 npm publish --access public
 git tag v1.0.0
-npm run release
+pnpm run release
 ```
 
 首次发布后，在 npm 包设置中创建 GitHub Actions Trusted Publisher，配置如下：
@@ -105,16 +105,16 @@ npm run release
 后续版本由 GitHub Actions 自动发布。日常发布流程为：
 
 ```bash
-npm version patch # 也可使用 minor 或 major
-# npm version prepatch --preid=beta 一个 patch 的 beta 预发版
-npm run release
+pnpm version patch # 也可使用 minor 或 major
+# pnpm version prerelease --preid=beta 一个 patch 的 beta 预发版
+pnpm run release
 ```
 
 | 命令	| 输出版本	| 说明 |
 | ---- | ---- | ---- |
-| npm version patch	| 1.2.4	正式补丁版本 |
-| npm version prepatch --preid=beta |	1.2.4‑beta.0 |	下一个 patch 的 beta 预发版 |
-| npm version prerelease	| 1.2.4‑beta.1 |	预发布序号 + 1（迭代 beta）|
-| npm version patch |	1.2.4	| beta 测试完成，转正正式版本 |
+| pnpm version patch | 1.2.4 | 正式补丁版本 |
+| pnpm version prerelease --preid=beta | 1.2.4‑beta.0 | 下一个 patch 的 beta 预发版 |
+| pnpm version prerelease | 1.2.4‑beta.1 | 预发布序号 + 1（迭代 beta）|
+| pnpm version patch | 1.2.4 | beta 测试完成，转正正式版本 |
 
 `vX.Y.Z` 标签会触发类型检查、测试、构建、npm 发布和 GitHub Release 创建。
