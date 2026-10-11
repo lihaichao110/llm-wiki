@@ -110,6 +110,8 @@ pnpm version patch # 也可使用 minor 或 major
 pnpm run release
 ```
 
+也可以在 GitHub Actions 的“发布 npm 包”工作流中点击“Run workflow”，选择 `main` 分支手动发布。工作流会从 `main` 的历史中选取版本号最高的 `v*` tag，并要求它与 `package.json` 的版本一致；随后用 `main` 当前代码发布该版本，并复用这个 tag 创建 GitHub Release，不会新建 tag。若需要 Release 页面上的 tag 也指向本次构建的 commit，请先确保该 tag 已指向 `main` 当前 commit。
+
 | 命令	| 输出版本	| 说明 |
 | ---- | ---- | ---- |
 | pnpm version patch | 1.2.4 | 正式补丁版本 |
