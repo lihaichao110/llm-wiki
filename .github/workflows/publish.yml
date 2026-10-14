@@ -12,6 +12,8 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
     steps:
       - name: 检出代码
         uses: actions/checkout@v6

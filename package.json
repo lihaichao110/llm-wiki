@@ -12,6 +12,7 @@
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "pnpm run typecheck && pnpm test",
+    "prepare": "husky",
     "release": "git push origin main --follow-tags",
     "prepack": "pnpm run build",
     "prepublishOnly": "pnpm run check"
@@ -45,9 +46,12 @@
   ],
   "type": "module",
   "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^26.6.4",
     "@types/turndown": "^5.0.6",
+    "husky": "^9.1.7",
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"

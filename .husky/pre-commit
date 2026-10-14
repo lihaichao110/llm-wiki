@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+. "$(dirname "$0")/use-node.sh"
+
+# 在生成提交前同时检查类型与单元测试。
+pnpm run check

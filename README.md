@@ -92,6 +92,8 @@ nvm use
 pnpm install --frozen-lockfile
 ```
 
+安装依赖时会启用 Husky。提交前自动运行 `pnpm run check`（类型检查和单元测试），提交信息由 commitlint 校验。日常提交使用 `type(scope): 中文说明`，例如 `fix(vector): 修复空向量校验`；scope 可以省略。`pnpm version` 生成的纯版本号提交仍然允许。
+
 ## 发布
 
 首次发布需要在本机登录 npm，并通过二次验证创建公开包：

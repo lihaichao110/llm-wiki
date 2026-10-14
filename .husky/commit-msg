@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+. "$(dirname "$0")/use-node.sh"
+
+# Git 将待提交的信息文件作为第一个参数传入此 hook。
+pnpm exec commitlint --edit "$1"
