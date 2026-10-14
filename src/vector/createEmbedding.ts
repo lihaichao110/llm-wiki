@@ -1,4 +1,3 @@
-import chalk from "chalk";
 import { OpenRouter } from '@openrouter/sdk'
 import { CreateEmbeddingsResponseBody } from "@openrouter/sdk/models/operations";
 import type { EmbeddingInfo } from "@/types/embedding";
@@ -6,13 +5,14 @@ import type { EmbeddingInfo } from "@/types/embedding";
 /**
  * 为文本分块逐个请求 BGE-M3，并返回与输入顺序一致的向量。
  * @param input 待向量化的非空文本或文本分块数组。
+ * @param fileName 原始文件名；查询问题使用标记名称。
  * @returns 每个文本对应的平均池化 embedding。
  * @throws OPENROUTER_API_KEY 未配置、请求失败或响应格式异常时抛出带上下文的错误。
  */
 export async function createEmbedding(input: string | string[], fileName: string): Promise<EmbeddingInfo[]> {
   const token = process.env.OPENROUTER_API_KEY;
   if (!token) {
-    throw console.log(chalk.redBright('缺少 OPENROUTER_API_KEY。请设置具有 Inference 权限的 OpenRouter Access Token。'))
+    throw new Error('缺少 OPENROUTER_API_KEY。请设置具有 Inference 权限的 OpenRouter Access Token。');
   }
   // splitMarkdown 目前返回单个字符串；保留数组形式以兼容后续分块实现。
   const contents = typeof input === "string" ? [input] : input;

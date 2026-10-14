@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import '@/commands/start'
 import '@/commands/compile'
 import '@/commands/vector'
+import '@/commands/query'
 import { program } from 'commander'
 
 // 从包元数据读取版本，避免 CLI 版本号与 package.json 不一致。

@@ -15,7 +15,7 @@ npm install --global @lihaichao/llm-wiki
 
 ## 配置
 
-运行编译命令前，设置模型和兼容接口的环境变量：
+运行编译或查询命令前，设置模型和兼容接口的环境变量：
 
 ```bash
 export LLM_MODEL="<模型名称>"
@@ -43,6 +43,7 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 | `llm-wiki compile` | 将 `sources/` 中的 Markdown 资料整理为 `wiki/` 下的 Wiki 内容。 |
 | `llm-wiki compile --concurrency <数量>` | 编译资料，并设置同时处理的任务数量。 |
 | `llm-wiki vector` | 为 `wiki/concepts/` 中的内容生成向量，保存到 `.llmwiki/embedding.json`。 |
+| `llm-wiki query <question>` | 检索向量索引，并根据相关 Wiki 内容生成带来源的回答。 |
 | `llm-wiki --help` | 查看命令帮助。 |
 | `llm-wiki --version`、`llm-wiki -V` | 查看当前版本。 |
 
@@ -67,6 +68,14 @@ llm-wiki vector
 ```
 
 运行前请先生成 `wiki/concepts/` 内容，并配置 `OPENROUTER_API_KEY`。每个文件处理完成后会汇总写入向量记录；没有可处理的 Markdown 文件时会提示并结束。
+
+检索 Wiki 中与问题最相关的内容：
+
+```bash
+llm-wiki query "无限乱斗有什么特点？"
+```
+
+查询需要先运行 `llm-wiki vector`，并配置 `OPENROUTER_API_KEY` 生成问题向量，以及 `LLM_MODEL`、`LLM_API_KEY`、`LLM_BASE_URL` 等模型接口配置（本地兼容服务可不提供 API Key）。命令最多检索 6 条 Wiki 内容，输出基于这些内容的回答，并在文末列出回答实际引用的文件；资料不足时会明确说明。
 
 查看所有可用命令：
 
