@@ -15,7 +15,8 @@
     "prepare": "husky",
     "release": "git push origin main --follow-tags",
     "prepack": "pnpm run build",
-    "prepublishOnly": "pnpm run check"
+    "prepublishOnly": "pnpm run check",
+    "push": "pnpm version patch && pnpm run release"
   },
   "keywords": [
     "llm",
