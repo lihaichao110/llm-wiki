@@ -1,6 +1,6 @@
 # llm-wiki
 
-`llm-wiki` 是一个将网页和 PDF 转换为 Markdown，并借助 OpenAI 兼容的大语言模型将资料编译为结构化 Wiki 的命令行工具。
+`llm-wiki` 是一个将网页、在线 PDF 和本地 TXT/Markdown 文件整理为 Markdown，并借助 OpenAI 兼容的大语言模型将资料编译为结构化 Wiki 的命令行工具。
 
 ## 环境要求
 
@@ -39,7 +39,7 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 
 | 命令 | 作用 |
 | --- | --- |
-| `llm-wiki start <url>` | 抓取网页或在线 PDF，并保存为 Markdown。 |
+| `llm-wiki start <input>` | 导入网页、在线 PDF 或单个本地 TXT/Markdown 文件，并保存为 Markdown。 |
 | `llm-wiki compile` | 将 `sources/` 中的 Markdown 资料整理为 `wiki/` 下的 Wiki 内容。 |
 | `llm-wiki compile --concurrency <数量>` | 编译资料，并设置同时处理的任务数量。 |
 | `llm-wiki vector` | 为 `wiki/concepts/` 中的内容生成向量，保存到 `.llmwiki/embedding.json`。 |
@@ -47,12 +47,16 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 | `llm-wiki --help` | 查看命令帮助。 |
 | `llm-wiki --version`、`llm-wiki -V` | 查看当前版本。 |
 
-将网页或在线 PDF 转换为 Markdown：
+将网页、在线 PDF 或本地文件导入 `sources/`：
 
 ```bash
 llm-wiki start https://en.wikipedia.org/wiki/Andrej_Karpathy
 llm-wiki start https://bitcoin.org/bitcoin.pdf
+llm-wiki start ./notes.txt
+llm-wiki start ./articles/intro.md
 ```
+
+本地文件路径支持相对路径和绝对路径，扩展名不区分大小写。TXT 和 Markdown 文件的全部内容都会作为正文导入；工具会使用文件名和原文件的绝对路径生成 `title`、`source`、`sourceType` 元数据。即使 Markdown 文件以类似 Frontmatter 的文本开头，也会将其保留在正文中。本次暂不支持导入目录或本地 PDF。
 
 将 `sources/` 中的 Markdown 资料编译为 `wiki/` 下的结构化内容：
 
