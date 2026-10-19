@@ -1,6 +1,6 @@
 import { FRONTMATTER_PATTERN, HeaderSource } from "@/tools/shared";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parse, stringify } from "yaml";
 
@@ -10,6 +10,8 @@ export interface MarkdownFileConfig {
   directory: string;
   /** 写入文件顶部的 YAML Frontmatter 数据。 */
   frontmatter: HeaderSource;
+  /** start 导入时按最终文件名跳过，其他调用方沿用来源冲突处理。 */
+  onConflict?: "skip";
 }
 
 
@@ -133,7 +135,7 @@ const resolveTargetDirectory = async (directory: string): Promise<string> => {
  * @returns 清理完成且带有 `.md` 扩展名的文件名。
  * @throws 文件名清理后为空或仅包含路径标记时抛出异常。
  */
-const normalizeMarkdownFileName = (fileName: string): string => {
+export const normalizeMarkdownFileName = (fileName: string): string => {
   /** 移除已有 Markdown 扩展名及其两侧无意义空白后的基础名称。 */
   const nameWithoutExtension = fileName.trim().replace(/\.md$/i, "").trim();
   /** 将内部空白转换为连接符，并移除非法字符、重复连接符和结尾点号。 */
@@ -154,6 +156,30 @@ const normalizeMarkdownFileName = (fileName: string): string => {
     : sanitizedName;
 
   return `${portableName}.md`;
+};
+
+/**
+ * 在读取或转换正文前判断目标 Markdown 文件是否已被占用。
+ *
+ * @param fileName 原始标题或文件名。
+ * @param directory 相对于当前工作目录的输出目录。
+ * @returns 规范化后的目标文件是否存在，包括符号链接。
+ */
+export const markdownFileExists = async (
+  fileName: string,
+  directory: string,
+): Promise<boolean> => {
+  const targetDirectory = await resolveTargetDirectory(directory);
+  const targetFilePath = path.join(targetDirectory, normalizeMarkdownFileName(fileName));
+  try {
+    await lstat(targetFilePath);
+    return true;
+  } catch (error) {
+    if (isErrorCode(error, "ENOENT")) {
+      return false;
+    }
+    throw error;
+  }
 };
 
 /**
@@ -286,20 +312,20 @@ const resolveHashedFilePath = async (
 
 /**
  * 在当前命令执行目录的指定子目录内创建或更新 Markdown 文件。
- * 同名文件仅在 Frontmatter 的规范化来源标识相同时覆盖，否则使用来源哈希区分。
+ * 默认按 Frontmatter 来源覆盖或追加哈希；start 的 skip 模式只独占创建空缺文件。
  * 来源可以使用单数 source 或复数 sources 表示。
  *
  * @param fileName - 目标 Markdown 文件名或用于生成文件名的标题。
  * @param content - 不包含 Frontmatter 的 Markdown 正文。
  * @param config - 输出目录及 Frontmatter 配置。
- * @returns 文件写入完成后返回，无返回值。
+ * @returns 实际写入或因同名跳过的结果。
  * @throws 配置无效、路径越界或文件系统操作失败时抛出异常。
  */
 export const writeMarkdownFile = async (
   fileName: string,
   content: string,
   config: MarkdownFileConfig,
-): Promise<void> => {
+): Promise<"written" | "skipped"> => {
   /** 当前内容由单数或复数来源生成的统一标识。 */
   const sourceIdentity = createSourceIdentity(config.frontmatter);
   if (!sourceIdentity) {
@@ -314,6 +340,20 @@ export const writeMarkdownFile = async (
   const normalizedFileName = normalizeMarkdownFileName(fileName);
   /** 未发生来源冲突时优先使用的文件路径。 */
   const defaultFilePath = path.join(targetDirectory, normalizedFileName);
+  if (config.onConflict === "skip") {
+    /** 独占创建保证检查后出现同名文件时也不会覆盖。 */
+    const serializedFrontmatter = stringify(config.frontmatter).trimEnd();
+    const markdownContent = `---\n${serializedFrontmatter}\n---\n\n${content}`;
+    try {
+      await writeFile(defaultFilePath, markdownContent, { encoding: "utf8", flag: "wx" });
+      return "written";
+    } catch (error) {
+      if (isErrorCode(error, "EEXIST")) {
+        return "skipped";
+      }
+      throw error;
+    }
+  }
   /** 默认文件路径的占用状态及已有来源标识。 */
   const existingFile = await readExistingSourceIdentity(defaultFilePath);
   /** 最终写入路径；来源冲突时改用带来源哈希的文件名。 */
@@ -332,4 +372,5 @@ export const writeMarkdownFile = async (
   const markdownContent = `---\n${serializedFrontmatter}\n---\n\n${content}`;
 
   await writeFile(targetFilePath, markdownContent, "utf8");
+  return "written";
 };

@@ -2,7 +2,7 @@
   "name": "@lihaichao/llm-wiki",
   "version": "1.0.8",
   "packageManager": "pnpm@11.1.2",
-  "description": "将网页和 PDF 整理为可由大语言模型编译的结构化 Wiki",
+  "description": "将在线文件与本地文件整理为可由大语言模型编译的结构化 Wiki",
   "bin": {
     "llm-wiki": "dist/index.js"
   },

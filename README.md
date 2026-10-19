@@ -39,7 +39,8 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 
 | 命令 | 作用 |
 | --- | --- |
-| `llm-wiki start <input>` | 导入网页、在线 PDF 或单个本地 TXT/Markdown 文件，并保存为 Markdown。 |
+| `llm-wiki start <input>` | 导入网页、在线 PDF、本地 TXT/Markdown 文件或文件夹，并保存为 Markdown。 |
+| `llm-wiki start <input> --concurrency <数量>` | 递归导入文件夹时设置同时处理的任务数量，默认 3。 |
 | `llm-wiki compile` | 将 `sources/` 中的 Markdown 资料整理为 `wiki/` 下的 Wiki 内容。 |
 | `llm-wiki compile --concurrency <数量>` | 编译资料，并设置同时处理的任务数量。 |
 | `llm-wiki vector` | 为 `wiki/concepts/` 中的内容生成向量，保存到 `.llmwiki/embedding.json`。 |
@@ -54,9 +55,12 @@ llm-wiki start https://en.wikipedia.org/wiki/Andrej_Karpathy
 llm-wiki start https://bitcoin.org/bitcoin.pdf
 llm-wiki start ./notes.txt
 llm-wiki start ./articles/intro.md
+llm-wiki start ./articles --concurrency 3
 ```
 
-本地文件路径支持相对路径和绝对路径，扩展名不区分大小写。TXT 和 Markdown 文件的全部内容都会作为正文导入；工具会使用文件名和原文件的绝对路径生成 `title`、`source`、`sourceType` 元数据。即使 Markdown 文件以类似 Frontmatter 的文本开头，也会将其保留在正文中。本次暂不支持导入目录或本地 PDF。
+本地文件路径支持相对路径和绝对路径，扩展名不区分大小写。文件夹会递归扫描，TXT 和 Markdown 文件的全部内容都会作为正文导入；其他文件和符号链接会显示为跳过。本地 PDF 暂不支持。工具会使用文件名和原文件的绝对路径生成 `title`、`source`、`sourceType` 元数据。即使 Markdown 文件以类似 Frontmatter 的文本开头，也会将其保留在正文中。
+
+导入结果统一平铺保存到当前目录的 `sources/`。如果规范化后的输出 Markdown 文件名已存在，就跳过该文件，不更新旧内容，也不生成带哈希后缀的副本。网页和在线 PDF 会在取得标题后检查重名。处理状态逐文件显示；单个文件失败不会中断其他任务，结束时汇总成功、跳过和失败数量。
 
 将 `sources/` 中的 Markdown 资料编译为 `wiki/` 下的结构化内容：
 

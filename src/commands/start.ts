@@ -1,36 +1,42 @@
-import { resolveStartInput, type StartInputKind } from "@/start/resolveStartInput";
-import { importLocalMarkdown, importLocalText } from "@/start/localText";
-import { pdfTool } from "@/tools/pdf";
-import { webTool } from "@/tools/web";
+import { runStartImport } from "@/start/runStartImport";
 import chalk from "chalk";
-import { program } from "commander";
-import ora from 'ora'
+import { InvalidArgumentError, program } from "commander";
 
-/** 各输入类型对应的处理器；新增格式时只需扩展识别规则和此映射。 */
-const INPUT_HANDLERS: Record<StartInputKind, (value: string) => Promise<void>> = {
-  web: webTool,
-  onlinePdf: pdfTool,
-  localText: importLocalText,
-  localMarkdown: importLocalMarkdown,
-};
+/**
+ * 解析单轮导入允许同时处理的文件数。
+ *
+ * @param value 命令行传入的并发数。
+ * @returns 大于零的安全整数。
+ * @throws 输入不是正整数时抛出 Commander 参数错误。
+ */
+function parseConcurrency(value: string): number {
+  const count = Number(value);
+  if (!Number.isSafeInteger(count) || count < 1) {
+    throw new InvalidArgumentError("并发数量必须是大于等于 1 的整数");
+  }
+  return count;
+}
 
 program
   .command("start")
-  .description("导入网页、在线 PDF 或本地 TXT/Markdown 文件")
-  .argument("<input>", "HTTP(S) 地址或本地文件路径")
-  .action(async (input: string) => {
-    let spinner = null
+  .description("导入网页、在线 PDF、本地 TXT/Markdown 文件或文件夹")
+  .argument("<input>", "HTTP(S) 地址、本地文件路径或文件夹路径")
+  .option("-c, --concurrency <count>", "同时导入的文件数量", parseConcurrency, 3)
+  .action(async (input: string, options: { concurrency: number }) => {
     try {
-
-      spinner = ora(chalk.blue(`开始处理任务: ${input}`)).start()
-      const resolvedInput = await resolveStartInput(input);
-      await INPUT_HANDLERS[resolvedInput.kind](resolvedInput.value);
-      spinner.succeed('✅ 处理成功')
+      const summary = await runStartImport(input, options.concurrency);
+      console.log(chalk.green(
+        `导入结束：成功 ${summary.written}，跳过 ${summary.skipped}，失败 ${summary.errors.length}`,
+      ));
+      for (const error of summary.errors) {
+        console.error(chalk.red(`- ${error.name}：${error.message}`));
+      }
+      if (summary.errors.length > 0) {
+        process.exitCode = 1;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(chalk.red(`❌ 处理失败：${message}`));
+      console.error(chalk.red(`处理失败：${message}`));
       process.exitCode = 1;
-    } finally {
-      spinner?.stop()
     }
   });
