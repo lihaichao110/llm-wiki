@@ -5,7 +5,7 @@ import path from "node:path";
 export interface LocalInputEntry {
   path: string;
   displayName: string;
-  kind: "localText" | "localMarkdown" | "skip";
+  kind: "localPdf" | "localText" | "localMarkdown" | "skip";
   skipReason?: string;
 }
 
@@ -45,7 +45,7 @@ export async function collectLocalInputs(rootDirectory: string): Promise<LocalIn
       }
 
       const extension = path.extname(entry.name).toLowerCase();
-      if (!entry.isFile() || (extension !== ".txt" && extension !== ".md")) {
+      if (!entry.isFile() || (extension !== ".pdf" && extension !== ".txt" && extension !== ".md")) {
         inputs.push({ path: entryPath, displayName, kind: "skip", skipReason: "格式不支持" });
         continue;
       }
@@ -53,7 +53,7 @@ export async function collectLocalInputs(rootDirectory: string): Promise<LocalIn
       inputs.push({
         path: entryPath,
         displayName,
-        kind: extension === ".txt" ? "localText" : "localMarkdown",
+        kind: extension === ".pdf" ? "localPdf" : extension === ".txt" ? "localText" : "localMarkdown",
       });
     }
   };

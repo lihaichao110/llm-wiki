@@ -6,6 +6,8 @@ export enum SourceTypeEnum {
   Web = 'web',
   /** 在线 PDF */
   OnlinePdf = 'onlinePdf',
+  /** 本地 PDF */
+  LocalPdf = 'localPdf',
   /** 本地纯文本文件 */
   LocalText = 'localText',
   /** 本地 Markdown 文件 */

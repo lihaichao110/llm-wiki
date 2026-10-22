@@ -3,7 +3,7 @@ import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 /** start 命令当前支持的输入类型。 */
-export type StartInputKind = "web" | "onlinePdf" | "localText" | "localMarkdown" | "localDirectory";
+export type StartInputKind = "web" | "onlinePdf" | "localPdf" | "localText" | "localMarkdown" | "localDirectory";
 
 /** 已识别的输入，value 为 URL 或本地文件/目录的真实绝对路径。 */
 export interface ResolvedStartInput {
@@ -13,6 +13,7 @@ export interface ResolvedStartInput {
 
 /** 本地扩展名与处理器类型的映射，扩展名统一使用小写。 */
 const LOCAL_INPUT_KINDS: Record<string, StartInputKind> = {
+  ".pdf": "localPdf",
   ".txt": "localText",
   ".md": "localMarkdown",
 };
@@ -62,10 +63,6 @@ export async function resolveStartInput(input: string): Promise<ResolvedStartInp
   }
 
   const extension = path.extname(absolutePath).toLowerCase();
-  if (extension === ".pdf") {
-    throw new Error("暂不支持本地 PDF 文件，请提供在线 PDF 地址");
-  }
-
   const kind = LOCAL_INPUT_KINDS[extension];
   if (!kind) {
     throw new Error(`不支持的本地文件类型：${extension || "无扩展名"}`);

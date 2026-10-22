@@ -1,5 +1,6 @@
 import { collectLocalInputs } from "@/start/collectLocalInputs";
 import { importLocalMarkdown, importLocalText } from "@/start/localText";
+import { importLocalPdf } from "@/start/localPdf";
 import { resolveStartInput, type StartInputKind } from "@/start/resolveStartInput";
 import type { ImportResult } from "@/start/processNamedSource";
 import { pdfTool } from "@/tools/pdf";
@@ -26,6 +27,7 @@ export interface StartImportSummary {
 const INPUT_HANDLERS: Record<Exclude<StartInputKind, "localDirectory">, (value: string) => Promise<ImportResult>> = {
   web: webTool,
   onlinePdf: pdfTool,
+  localPdf: importLocalPdf,
   localText: importLocalText,
   localMarkdown: importLocalMarkdown,
 };

@@ -1,6 +1,8 @@
 # llm-wiki
 
-`llm-wiki` 是一个将网页、在线 PDF 和本地 TXT/Markdown 文件整理为 Markdown，并借助 OpenAI 兼容的大语言模型将资料编译为结构化 Wiki 的命令行工具。
+`llm-wiki` 是一个将网页、在线 PDF 和本地 PDF/TXT/Markdown 文件整理为 Markdown，并借助 OpenAI 兼容的大语言模型将资料编译为结构化 Wiki 的命令行工具。
+
+各版本的新增功能、修复与维护记录见 [更新日志](CHANGELOG.md)。
 
 ## 环境要求
 
@@ -39,7 +41,7 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 
 | 命令 | 作用 |
 | --- | --- |
-| `llm-wiki start <input>` | 导入网页、在线 PDF、本地 TXT/Markdown 文件或文件夹，并保存为 Markdown。 |
+| `llm-wiki start <input>` | 导入网页、在线 PDF、本地 PDF/TXT/Markdown 文件或文件夹，并保存为 Markdown。 |
 | `llm-wiki start <input> --concurrency <数量>` | 递归导入文件夹时设置同时处理的任务数量，默认 3。 |
 | `llm-wiki compile` | 将 `sources/` 中的 Markdown 资料整理为 `wiki/` 下的 Wiki 内容。 |
 | `llm-wiki compile --concurrency <数量>` | 编译资料，并设置同时处理的任务数量。 |
@@ -53,14 +55,15 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 ```bash
 llm-wiki start https://en.wikipedia.org/wiki/Andrej_Karpathy
 llm-wiki start https://bitcoin.org/bitcoin.pdf
+llm-wiki start ./reports/scan.pdf
 llm-wiki start ./notes.txt
 llm-wiki start ./articles/intro.md
 llm-wiki start ./articles --concurrency 3
 ```
 
-本地文件路径支持相对路径和绝对路径，扩展名不区分大小写。文件夹会递归扫描，TXT 和 Markdown 文件的全部内容都会作为正文导入；其他文件和符号链接会显示为跳过。本地 PDF 暂不支持。工具会使用文件名和原文件的绝对路径生成 `title`、`source`、`sourceType` 元数据。即使 Markdown 文件以类似 Frontmatter 的文本开头，也会将其保留在正文中。
+本地文件路径支持相对路径和绝对路径，扩展名不区分大小写。文件夹会递归扫描 PDF、TXT 和 Markdown 文件；其他文件和符号链接会显示为跳过。TXT 和 Markdown 文件的全部内容会作为正文导入。本地 PDF 优先使用文件内的 `Title` 元数据作为标题，否则使用文件名；`source` 记录原文件的真实绝对路径，`sourceType` 为 `localPdf`。PDF 中有可提取文字的页面直接使用原文，仅对没有文字的页面执行简体中文和英文 OCR。首次使用 OCR 需联网下载语言模型，之后复用用户缓存；OCR 后整份 PDF 仍无正文时该文件会计为失败。即使 Markdown 文件以类似 Frontmatter 的文本开头，也会将其保留在正文中。
 
-导入结果统一平铺保存到当前目录的 `sources/`。如果规范化后的输出 Markdown 文件名已存在，就跳过该文件，不更新旧内容，也不生成带哈希后缀的副本。网页和在线 PDF 会在取得标题后检查重名。处理状态逐文件显示；单个文件失败不会中断其他任务，结束时汇总成功、跳过和失败数量。
+导入结果统一平铺保存到当前目录的 `sources/`。如果规范化后的输出 Markdown 文件名已存在，就跳过该文件，不更新旧内容，也不生成带哈希后缀的副本。网页和 PDF 会在取得标题后检查重名。处理状态逐文件显示；单个文件失败不会中断其他任务，结束时汇总成功、跳过和失败数量。
 
 将 `sources/` 中的 Markdown 资料编译为 `wiki/` 下的结构化内容：
 
@@ -123,6 +126,8 @@ pnpm run release
 新建的 Trusted Publisher 需要在两天内完成首次自动发布，因此应在准备发布下一个版本时再创建。首次 OIDC 发布成功后，可在 npm 中禁用传统发布 Token。
 
 后续版本由 GitHub Actions 自动发布。日常发布流程为：
+
+发版前先人工更新 `CHANGELOG.md`：将“未发布”的变更整理到新版本章节，并核对该版本包含的提交。
 
 ```bash
 pnpm version patch # 也可使用 minor 或 major
