@@ -1,6 +1,28 @@
 import { LlmMessage } from "@/types/llm";
 import { LlmGenerateOptions, LlmProvider } from "@/types/provider";
 
+/** 未指定兼容接口地址时使用的 OpenAI 官方地址。 */
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+
+/** 默认地址鉴权或模型配置失败时给出的排查提示。 */
+const DEFAULT_OPENAI_BASE_URL_HINT =
+  "当前请求发送到了 OpenAI 默认接口。如果你使用的是其他服务商的模型或 API Key，请设置 LLM_BASE_URL 为该服务商的 OpenAI 兼容接口根地址；如果使用的是 OpenAI，请检查 LLM_API_KEY（或 OPENAI_API_KEY）和 LLM_MODEL。";
+
+/**
+ * 判断 404 响应是否明确表示模型不存在，避免将路径等其他 404 误判为模型配置问题。
+ *
+ * @param errorBody 接口返回的原始错误正文。
+ * @returns 错误代码为 model_not_found 时返回 true。
+ */
+function isModelNotFoundError(errorBody: string): boolean {
+  try {
+    const payload = JSON.parse(errorBody) as { error?: { code?: unknown } };
+    return payload.error?.code === "model_not_found";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * OpenAI 兼容接口配置。
  */
@@ -63,7 +85,7 @@ export class OpenAICompatibleProvider implements LlmProvider {
 
     // 移除末尾斜杠，避免拼接地址时出现双斜杠。
     this.baseURL = (
-      options.baseURL ?? "https://api.openai.com/v1"
+      options.baseURL ?? DEFAULT_OPENAI_BASE_URL
     ).replace(/\/+$/, "");
 
     this.fetchImplementation =
@@ -76,6 +98,7 @@ export class OpenAICompatibleProvider implements LlmProvider {
    * @param messages 发送给模型的消息。
    * @param options 输出格式配置。
    * @returns 模型返回的消息正文。
+   * @throws 接口返回失败状态或无效内容时抛出错误；默认 OpenAI 地址的鉴权或模型不存在错误会附带配置提示。
    */
   async generateText(messages: readonly LlmMessage[], options?: LlmGenerateOptions): Promise<string> {
     const headers: Record<string, string> = {
@@ -115,9 +138,17 @@ export class OpenAICompatibleProvider implements LlmProvider {
 
       // 限制错误正文长度，避免终端被超长响应占满。
       const shortErrorBody = errorBody.slice(0, 500);
+      // 只有默认 OpenAI 地址上的鉴权或模型不存在错误才提示检查接口地址。
+      const shouldSuggestBaseURL =
+        this.baseURL === DEFAULT_OPENAI_BASE_URL &&
+        (response.status === 401 ||
+          (response.status === 404 && isModelNotFoundError(errorBody)));
+      const configurationHint = shouldSuggestBaseURL
+        ? `\n提示：${DEFAULT_OPENAI_BASE_URL_HINT}`
+        : "";
 
       throw new Error(
-        `大模型请求失败（HTTP ${response.status}）：${shortErrorBody}`,
+        `大模型请求失败（HTTP ${response.status}）：${shortErrorBody}${configurationHint}`,
       );
     }
 

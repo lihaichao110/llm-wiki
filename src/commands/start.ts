@@ -19,7 +19,7 @@ function parseConcurrency(value: string): number {
 
 program
   .command("start")
-  .description("导入网页、在线 PDF、本地 PDF/TXT/Markdown 文件或文件夹")
+  .description("导入网页、在线 PDF、本地 PDF/TXT/Markdown/XLSX/XLS 文件或文件夹")
   .argument("<input>", "HTTP(S) 地址、本地文件路径或文件夹路径")
   .option("-c, --concurrency <count>", "同时导入的文件数量", parseConcurrency, 3)
   .action(async (input: string, options: { concurrency: number }) => {

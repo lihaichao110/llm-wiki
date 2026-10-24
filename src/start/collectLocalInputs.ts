@@ -1,11 +1,12 @@
 import { readdir, realpath } from "node:fs/promises";
 import path from "node:path";
+import { LOCAL_INPUT_KINDS, type LocalFileInputKind } from "@/start/resolveStartInput";
 
 /** 目录扫描结果；不支持的普通文件和链接也保留为可显示的跳过任务。 */
 export interface LocalInputEntry {
   path: string;
   displayName: string;
-  kind: "localPdf" | "localText" | "localMarkdown" | "skip";
+  kind: LocalFileInputKind | "skip";
   skipReason?: string;
 }
 
@@ -45,7 +46,8 @@ export async function collectLocalInputs(rootDirectory: string): Promise<LocalIn
       }
 
       const extension = path.extname(entry.name).toLowerCase();
-      if (!entry.isFile() || (extension !== ".pdf" && extension !== ".txt" && extension !== ".md")) {
+      const kind = LOCAL_INPUT_KINDS[extension];
+      if (!entry.isFile() || !kind) {
         inputs.push({ path: entryPath, displayName, kind: "skip", skipReason: "格式不支持" });
         continue;
       }
@@ -53,7 +55,7 @@ export async function collectLocalInputs(rootDirectory: string): Promise<LocalIn
       inputs.push({
         path: entryPath,
         displayName,
-        kind: extension === ".pdf" ? "localPdf" : extension === ".txt" ? "localText" : "localMarkdown",
+        kind,
       });
     }
   };

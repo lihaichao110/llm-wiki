@@ -11,7 +11,9 @@ export enum SourceTypeEnum {
   /** 本地纯文本文件 */
   LocalText = 'localText',
   /** 本地 Markdown 文件 */
-  LocalMarkdown = 'localMarkdown'
+  LocalMarkdown = 'localMarkdown',
+  /** 本地 XLSX/XLS 工作簿 */
+  LocalSpreadsheet = 'localSpreadsheet'
 }
 
 /** 通用头部类型 */

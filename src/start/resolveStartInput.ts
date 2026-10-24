@@ -3,7 +3,10 @@ import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 /** start 命令当前支持的输入类型。 */
-export type StartInputKind = "web" | "onlinePdf" | "localPdf" | "localText" | "localMarkdown" | "localDirectory";
+export type StartInputKind = "web" | "onlinePdf" | "localPdf" | "localText" | "localMarkdown" | "localSpreadsheet" | "localDirectory";
+
+/** 可通过文件扩展名识别并直接导入的本地文件类型。 */
+export type LocalFileInputKind = Exclude<StartInputKind, "web" | "onlinePdf" | "localDirectory">;
 
 /** 已识别的输入，value 为 URL 或本地文件/目录的真实绝对路径。 */
 export interface ResolvedStartInput {
@@ -12,10 +15,12 @@ export interface ResolvedStartInput {
 }
 
 /** 本地扩展名与处理器类型的映射，扩展名统一使用小写。 */
-const LOCAL_INPUT_KINDS: Record<string, StartInputKind> = {
+export const LOCAL_INPUT_KINDS: Readonly<Record<string, LocalFileInputKind | undefined>> = {
   ".pdf": "localPdf",
   ".txt": "localText",
   ".md": "localMarkdown",
+  ".xlsx": "localSpreadsheet",
+  ".xls": "localSpreadsheet",
 };
 
 /**
