@@ -145,6 +145,7 @@ test("拒绝模型返回其他概念名称", async () => {
 test("全量替换保留 createdAt 并删除陈旧页面", async () => {
   const testRoot = await mkdtemp(path.join(process.cwd(), ".replace-wiki-test-"));
   const outputDirectory = path.join(testRoot, "concepts");
+  const indexFilePath = path.join(testRoot, "index.md");
   const relativeOutputDirectory = path.relative(process.cwd(), outputDirectory);
 
   try {
@@ -166,6 +167,7 @@ test("全量替换保留 createdAt 并删除陈旧页面", async () => {
     );
     assert.equal(frontmatter.createdAt, "2020-01-01T00:00:00.000Z");
     assert.equal(frontmatter.updatedAt, "2026-10-06T00:00:00.000Z");
+    assert.match(await readFile(indexFilePath, "utf8"), /1 pages/);
   } finally {
     await rm(testRoot, { recursive: true, force: true });
   }
@@ -174,12 +176,14 @@ test("全量替换保留 createdAt 并删除陈旧页面", async () => {
 test("临时目录写入失败时保留原 Wiki", async () => {
   const testRoot = await mkdtemp(path.join(process.cwd(), ".replace-wiki-test-"));
   const outputDirectory = path.join(testRoot, "concepts");
+  const indexFilePath = path.join(testRoot, "index.md");
   const relativeOutputDirectory = path.relative(process.cwd(), outputDirectory);
 
   try {
     await mkdir(outputDirectory, { recursive: true });
     const existingPath = path.join(outputDirectory, "existing.md");
     await writeFile(existingPath, "original", "utf8");
+    await writeFile(indexFilePath, "original index", "utf8");
     const invalidConcept = { ...createWikiConcept(), sources: [] };
 
     await assert.rejects(
@@ -190,6 +194,7 @@ test("临时目录写入失败时保留原 Wiki", async () => {
     );
 
     assert.equal(await readFile(existingPath, "utf8"), "original");
+    assert.equal(await readFile(indexFilePath, "utf8"), "original index");
     assert.deepEqual(await readdir(outputDirectory), ["existing.md"]);
   } finally {
     await rm(testRoot, { recursive: true, force: true });
@@ -199,6 +204,7 @@ test("临时目录写入失败时保留原 Wiki", async () => {
 test("有效的空概念快照会替换为空目录", async () => {
   const testRoot = await mkdtemp(path.join(process.cwd(), ".replace-wiki-test-"));
   const outputDirectory = path.join(testRoot, "concepts");
+  const indexFilePath = path.join(testRoot, "index.md");
   const relativeOutputDirectory = path.relative(process.cwd(), outputDirectory);
 
   try {
@@ -208,6 +214,7 @@ test("有效的空概念快照会替换为空目录", async () => {
     await replaceWikiConceptFiles([], { outputDirectory: relativeOutputDirectory });
 
     assert.deepEqual(await readdir(outputDirectory), []);
+    assert.match(await readFile(indexFilePath, "utf8"), /0 pages/);
   } finally {
     await rm(testRoot, { recursive: true, force: true });
   }

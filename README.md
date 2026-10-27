@@ -2,9 +2,15 @@
 
 **把学习资料变成能提问、能追溯来源的个人 Wiki。**
 
-`llm-wiki` 是一个开源命令行项目：导入网页、在线 PDF 和本地 PDF/TXT/Markdown/XLSX/XLS 文件，将资料整理为 Markdown，再借助大语言模型编译成结构化 Wiki。无论是整理课程笔记、研究新技术，还是想借这个项目学习 LLM Wiki 的实现，你都可以沿着“导入 → 编译 → 向量化 → 提问”的流程边用边学。
+`llm-wiki` 是一个开源命令行项目：导入网页、在线 PDF 和本地 PDF/TXT/Markdown/XLSX/XLS 文件，将资料整理为 Markdown，再借助大语言模型编译成结构化 Wiki。无论是整理课程笔记、研究新技术，还是想借这个项目学习 LLM Wiki 的实现，你都可以沿着“导入 → 编译 → 查看关系图 → 向量化 → 提问”的流程边用边学。
 
 **从一篇资料开始：** 先 [安装](#安装)，运行 `llm-wiki start <网页地址>`；需要编译和提问时，再按 [配置](#配置) 接入模型。
+
+### 从资料到知识地图
+
+`llm-wiki` 将分散的资料编译成结构化 Wiki，并把概念之间的联系呈现在可交互的关系图中。运行 `llm-wiki view`，即可搜索概念、探索关联，点选节点查看摘要、标签与相关概念。
+
+![llm-wiki 概念关系图，展示概念关联与详情](src/static/page.png)
 
 各版本的新增功能、修复与维护记录见 [更新日志](CHANGELOG.md)。
 
@@ -51,6 +57,7 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 | `llm-wiki start <input> --concurrency <数量>` | 递归导入文件夹时设置同时处理的任务数量，默认 3。 |
 | `llm-wiki compile` | 将 `sources/` 中的 Markdown 资料整理为 `wiki/` 下的 Wiki 内容。 |
 | `llm-wiki compile --concurrency <数量>` | 编译资料，并设置同时处理的任务数量。 |
+| `llm-wiki view` | 在浏览器中查看 `wiki/concepts/` 的概念关系图。 |
 | `llm-wiki vector` | 为 `wiki/concepts/` 中的内容生成向量，保存到 `.llmwiki/embedding.json`。 |
 | `llm-wiki query <question>` | 检索向量索引，并根据相关 Wiki 内容生成带来源的回答。 |
 | `llm-wiki --help` | 查看命令帮助。 |
@@ -69,54 +76,6 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 | 本地文件夹 | 相对或绝对目录路径 | 递归导入上述本地文件格式 |
 
 本地文件扩展名不区分大小写；在线地址仅支持 HTTP(S)，并按 URL 路径的 `.pdf` 后缀识别在线 PDF。
-
-将网页、在线 PDF 或本地文件导入 `sources/`：
-
-```bash
-llm-wiki start https://en.wikipedia.org/wiki/Andrej_Karpathy
-llm-wiki start https://bitcoin.org/bitcoin.pdf
-llm-wiki start ./reports/scan.pdf
-llm-wiki start ./notes.txt
-llm-wiki start ./articles/intro.md
-llm-wiki start ./reports/sales.xlsx
-llm-wiki start ./reports/history.xls
-llm-wiki start ./articles --concurrency 3
-```
-
-本地文件路径支持相对路径和绝对路径，扩展名不区分大小写。文件夹会递归扫描 PDF、TXT、Markdown、XLSX 和 XLS 文件；其他文件和符号链接会显示为跳过。TXT 和 Markdown 文件的全部内容会作为正文导入。本地 PDF 优先使用文件内的 `Title` 元数据作为标题，否则使用文件名；`source` 记录原文件的真实绝对路径，`sourceType` 为 `localPdf`。PDF 中有可提取文字的页面直接使用原文，仅对没有文字的页面执行简体中文和英文 OCR。首次使用 OCR 需联网下载语言模型，之后复用用户缓存；OCR 后整份 PDF 仍无正文时该文件会计为失败。即使 Markdown 文件以类似 Frontmatter 的文本开头，也会将其保留在正文中。
-
-XLSX/XLS 工作簿每个文件生成一个 source，以文件名（不含扩展名）作为标题，`sourceType` 为 `localSpreadsheet`。只导入可见工作表，并按原顺序将每张非空工作表写为一个 Markdown 表格；首个非空行是表头，空单元格保留列位置，空工作表跳过。单元格使用文件保存的格式化显示值；公式不会重新计算，图片、图表和样式不会导入。文件损坏、加密格式不受支持或所有可见工作表都没有内容时，该文件会计为失败且不会生成 source。
-
-导入结果统一平铺保存到当前目录的 `sources/`。如果规范化后的输出 Markdown 文件名已存在，就跳过该文件，不更新旧内容，也不生成带哈希后缀的副本。网页和 PDF 会在取得标题后检查重名。处理状态逐文件显示；单个文件失败不会中断其他任务，结束时汇总成功、跳过和失败数量。
-
-将 `sources/` 中的 Markdown 资料编译为 `wiki/` 下的结构化内容：
-
-```bash
-llm-wiki compile
-llm-wiki compile --concurrency 3
-```
-
-为 `wiki/concepts/` 中的 Markdown 文件生成向量，并保存到 `.llmwiki/embedding.json`：
-
-```bash
-llm-wiki vector
-```
-
-运行前请先生成 `wiki/concepts/` 内容，并配置 `OPENROUTER_API_KEY`。每个文件处理完成后会汇总写入向量记录；没有可处理的 Markdown 文件时会提示并结束。
-
-检索 Wiki 中与问题最相关的内容：
-
-```bash
-llm-wiki query "无限乱斗有什么特点？"
-```
-
-查询需要先运行 `llm-wiki vector`，并配置 `OPENROUTER_API_KEY` 生成问题向量，以及 `LLM_MODEL`、`LLM_API_KEY`、`LLM_BASE_URL` 等模型接口配置（本地兼容服务可不提供 API Key）。命令最多检索 6 条 Wiki 内容，输出基于这些内容的回答，并在文末列出回答实际引用的文件；资料不足时会明确说明。
-
-查看所有可用命令：
-
-```bash
-llm-wiki --help
-```
 
 ## 开发
 

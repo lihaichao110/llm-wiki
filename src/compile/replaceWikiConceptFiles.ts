@@ -145,6 +145,8 @@ export async function replaceWikiConceptFiles(
   );
   const parentDirectory = path.dirname(outputDirectory);
   const outputName = path.basename(outputDirectory);
+  /** 索引始终属于本次概念输出目录，避免测试或自定义目录覆盖默认 Wiki。 */
+  const indexFilePath = path.join(parentDirectory, "index.md");
 
   await mkdir(parentDirectory, { recursive: true });
   /** 阻止父目录通过符号链接逃逸到当前工作目录之外。 */
@@ -180,7 +182,6 @@ export async function replaceWikiConceptFiles(
   let replacementInstalled = false;
 
   try {
-    await createIndexFiles(concepts)
     await writeConceptFiles(conceptsWithHistory, relativeStagingDirectory);
 
     if (await pathExists(outputDirectory)) {
@@ -203,6 +204,9 @@ export async function replaceWikiConceptFiles(
       await rm(backupDirectory, { recursive: true, force: true });
       originalMoved = false;
     }
+
+    // 概念目录成功替换后再更新索引，失败的快照不能覆盖现有索引。
+    await createIndexFiles(conceptsWithHistory, indexFilePath);
   } finally {
     if (!replacementInstalled) {
       await rm(stagingDirectory, { recursive: true, force: true });
