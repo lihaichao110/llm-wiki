@@ -11,17 +11,23 @@ import {
   readFile,
   readdir,
   realpath,
-  rename,
   rm,
+  writeFile,
 } from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { createIndexFiles } from "./createIndexFile";
+import { STATE_JSON } from "./comparisonCompileState";
+import { publishSnapshot, StagedArtifact } from "./publishSnapshot";
 
 /** Wiki 概念目录替换选项。 */
 export interface ReplaceWikiConceptFilesOptions {
   /** 相对于当前工作目录的目标目录。 */
   outputDirectory?: string;
+  /** 编译命令传入完整成功状态；独立替换概念时省略。 */
+  stateContent?: string;
+  /** 状态文件路径，默认 `STATE_JSON`。 */
+  stateFilePath?: string;
 }
 
 /**
@@ -130,11 +136,11 @@ async function readExistingCreatedAt(
 /**
  * 用完整的新快照替换 Wiki 概念目录。
  *
- * 所有文件会先写入同级临时目录；写入成功后再通过目录改名完成交换。
- * 交换失败时会恢复原目录，因此生成阶段的异常不会留下半更新状态。
+ * 概念页、索引和可选状态会先写入临时路径，再依次发布。
+ * 发布异常时按相反顺序恢复旧产物；状态始终最后提交。
  *
  * @param concepts 已完成跨来源综合的概念。
- * @param options 输出目录配置。
+ * @param options 输出目录及可选的完整成功状态。
  */
 export async function replaceWikiConceptFiles(
   concepts: WikiConcept[],
@@ -147,6 +153,33 @@ export async function replaceWikiConceptFiles(
   const outputName = path.basename(outputDirectory);
   /** 索引始终属于本次概念输出目录，避免测试或自定义目录覆盖默认 Wiki。 */
   const indexFilePath = path.join(parentDirectory, "index.md");
+  const indexStagingPath = path.join(parentDirectory, `.index.tmp-${randomUUID()}.md`);
+  /** 只有编译命令提供状态内容时才会触及状态文件。 */
+  const stateFilePath = options.stateContent === undefined ? undefined : path.resolve(
+    process.cwd(), options.stateFilePath ?? STATE_JSON,
+  );
+  if (stateFilePath) {
+    const relativeStatePath = path.relative(process.cwd(), stateFilePath);
+    if (
+      !relativeStatePath || relativeStatePath === ".."
+      || relativeStatePath.startsWith(`..${path.sep}`)
+      || path.isAbsolute(relativeStatePath)
+    ) {
+      throw new Error("编译状态文件必须位于当前工作目录内部");
+    }
+    await mkdir(path.dirname(stateFilePath), { recursive: true });
+    const realStateParent = await realpath(path.dirname(stateFilePath));
+    const realCwd = await realpath(process.cwd());
+    const relativeRealStateParent = path.relative(realCwd, realStateParent);
+    if (relativeRealStateParent === ".."
+      || relativeRealStateParent.startsWith(`..${path.sep}`)
+      || path.isAbsolute(relativeRealStateParent)) {
+      throw new Error("编译状态目录不能通过符号链接超出当前工作目录");
+    }
+  }
+  const stateStagingPath = stateFilePath
+    ? path.join(path.dirname(stateFilePath), `.state.tmp-${randomUUID()}.json`)
+    : undefined;
 
   await mkdir(parentDirectory, { recursive: true });
   /** 阻止父目录通过符号链接逃逸到当前工作目录之外。 */
@@ -167,10 +200,6 @@ export async function replaceWikiConceptFiles(
   const stagingDirectory = await mkdtemp(
     path.join(parentDirectory, `.${outputName}.tmp-`),
   );
-  const backupDirectory = path.join(
-    parentDirectory,
-    `.${outputName}.backup-${randomUUID()}`,
-  );
 
   const conceptsWithHistory = concepts.map((concept) => ({
     ...concept,
@@ -178,38 +207,25 @@ export async function replaceWikiConceptFiles(
       ?? concept.createdAt,
   }));
   const relativeStagingDirectory = path.relative(process.cwd(), stagingDirectory);
-  let originalMoved = false;
-  let replacementInstalled = false;
-
   try {
     await writeConceptFiles(conceptsWithHistory, relativeStagingDirectory);
-
-    if (await pathExists(outputDirectory)) {
-      await rename(outputDirectory, backupDirectory);
-      originalMoved = true;
+    await createIndexFiles(conceptsWithHistory, indexStagingPath);
+    /** 状态先写入临时文件，但直到 Wiki 与索引发布成功后才替换旧状态。 */
+    if (stateStagingPath !== undefined && options.stateContent !== undefined) {
+      await writeFile(stateStagingPath, options.stateContent, "utf8");
     }
 
-    try {
-      await rename(stagingDirectory, outputDirectory);
-      replacementInstalled = true;
-    } catch (error) {
-      if (originalMoved) {
-        await rename(backupDirectory, outputDirectory);
-        originalMoved = false;
-      }
-      throw error;
+    const artifacts: StagedArtifact[] = [
+      { targetPath: outputDirectory, stagedPath: stagingDirectory, kind: "directory" },
+      { targetPath: indexFilePath, stagedPath: indexStagingPath, kind: "file" },
+    ];
+    if (stateFilePath && stateStagingPath) {
+      artifacts.push({ targetPath: stateFilePath, stagedPath: stateStagingPath, kind: "file" });
     }
-
-    if (originalMoved) {
-      await rm(backupDirectory, { recursive: true, force: true });
-      originalMoved = false;
-    }
-
-    // 概念目录成功替换后再更新索引，失败的快照不能覆盖现有索引。
-    await createIndexFiles(conceptsWithHistory, indexFilePath);
+    await publishSnapshot(artifacts);
   } finally {
-    if (!replacementInstalled) {
-      await rm(stagingDirectory, { recursive: true, force: true });
-    }
+    await rm(stagingDirectory, { recursive: true, force: true });
+    await rm(indexStagingPath, { force: true });
+    if (stateStagingPath) await rm(stateStagingPath, { force: true });
   }
 }

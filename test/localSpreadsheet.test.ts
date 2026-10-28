@@ -46,7 +46,11 @@ test("XLSX 导入可见工作表，保留列位置并转义表格内容", async 
     workbook.Workbook = { Sheets: [{ Hidden: 0 }, { Hidden: 1 }, { Hidden: 0 }, { Hidden: 0 }] };
     await writeFile(filePath, XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer);
 
-    assert.deepEqual(await resolveStartInput(filePath), { kind: "localSpreadsheet", value: filePath });
+    assert.deepEqual(await resolveStartInput(filePath), {
+      kind: "localSpreadsheet",
+      value: filePath,
+      displayName: path.basename(filePath),
+    });
     assert.equal(await importLocalSpreadsheet(filePath), "written");
     assert.equal(await importLocalSpreadsheet(filePath), "skipped");
     assert.deepEqual(await readdir(path.join(root, "sources")), ["销售-报表.md"]);
@@ -79,7 +83,11 @@ test("XLS 与 XLSX 均参与目录导入，并保留逐文件失败统计", asyn
     await writeFile(path.join(root, "broken.xls"), "不是 XLS 文件", "utf8");
     await writeFile(path.join(root, "ignored.csv"), "忽略", "utf8");
 
-    assert.deepEqual(await resolveStartInput(oldPath), { kind: "localSpreadsheet", value: oldPath });
+    assert.deepEqual(await resolveStartInput(oldPath), {
+      kind: "localSpreadsheet",
+      value: oldPath,
+      displayName: "old.XLS",
+    });
     const summary = await runStartImport(root, 2, true);
     assert.equal(summary.written, 2);
     assert.equal(summary.skipped, 1);

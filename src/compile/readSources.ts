@@ -1,10 +1,8 @@
-import { readdir } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { readdir, stat } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import chalk from "chalk";
 import { parseSourceFile } from "./parseSourceFile";
 import { SourceDocument } from "@/types/document";
-import { loadCompileState } from "./comparisonCompileState";
-import { extractFilePath } from "@/utils/name";
 
 /**
  * 递归查找目录中的 Markdown 文件。
@@ -52,12 +50,15 @@ export async function readSourceFiles(
     // 固定排序可以保证每次编译时的文件处理顺序一致。
     return sourceFiles.sort((left, right) => left.localeCompare(right));
   } catch (error) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
-      return [];
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      try {
+        await stat(resolve(process.cwd(), sourcesDirectory));
+      } catch (rootError) {
+        if (rootError instanceof Error && "code" in rootError && rootError.code === "ENOENT") {
+          return [];
+        }
+        throw rootError;
+      }
     }
 
     throw error;
@@ -69,12 +70,16 @@ export async function readSourceFiles(
  *
  * 全量 Wiki 编译依赖所有 source 的概念，因此这里不会根据历史哈希跳过未变化文件。
  *
+ * @param sourcesDirectory 要扫描的 sources 目录，默认当前项目的 `sources`。
  * @returns 成功解析的全部 source 文档。
+ * @throws 任一文件读取或解析失败时中止整轮编译。
  */
-export async function readAllDocuments(): Promise<SourceDocument[]> {
+export async function readAllDocuments(
+  sourcesDirectory = "sources",
+): Promise<SourceDocument[]> {
   const sourceFilesList: SourceDocument[] = [];
 
-  const sourceFiles = await readSourceFiles('sources');
+  const sourceFiles = await readSourceFiles(sourcesDirectory);
 
   if (sourceFiles.length === 0) {
     console.log(chalk.red("sources 目录中没有找到 Markdown 文件。"));
@@ -85,21 +90,16 @@ export async function readAllDocuments(): Promise<SourceDocument[]> {
   console.log(chalk.greenBright(`共找到 ${sourceFiles.length} 个 Markdown 文件：`));
 
   for (const sourceFile of sourceFiles) {
-    const document = await parseSourceFile(sourceFile);
-    const displayPath = extractFilePath(sourceFile)
-    if (!document) {
-      console.log(chalk.redBright(`❌ ${displayPath} 文件处理失败`));
-      continue
-    }
-
     try {
-      loadCompileState(document)
-    } catch {
-      console.log(chalk.yellow(`⚠️ ${displayPath} 文件已编译，跳过编译！`));
-      continue
+      const document = await parseSourceFile(sourceFile);
+      if (!document) {
+        throw new Error("缺少有效的 Frontmatter");
+      }
+      sourceFilesList.push(document);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`${sourceFile} 解析失败：${reason}`, { cause: error });
     }
-
-    sourceFilesList.push(document);
   }
 
   return sourceFilesList;

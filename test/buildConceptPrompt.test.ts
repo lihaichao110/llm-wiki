@@ -48,3 +48,19 @@ test("可以指定概念输出语言", () => {
 
   assert.match(messages[0].content, /使用简体中文/);
 });
+
+test("参考表格属于可提取内容，正文中的联系方式不应被当作无关元数据", () => {
+  const messages = buildConceptExtractionMessages({
+    ...sourceDocument,
+    frontmatter: {
+      ...sourceDocument.frontmatter,
+      title: "各地监管行协联系方式",
+    },
+    content: "| 机构 | 电话 |\n| --- | --- |\n| 北京监管局 | 010-66060530 |",
+  });
+
+  assert.match(messages[0].content, /文档主体就是机构名录、联系方式、对照表/);
+  assert.match(messages[0].content, /保留原文中有用的名称、号码、网址和对应关系/);
+  assert.match(messages[0].content, /不要断言它们目前仍然有效/);
+  assert.match(messages[1].content, /010-66060530/);
+});

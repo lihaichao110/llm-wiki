@@ -7,7 +7,6 @@ import type { ImportResult } from "@/start/processNamedSource";
 import { pdfTool } from "@/tools/pdf";
 import { webTool } from "@/tools/web";
 import { Listr } from "listr2";
-import path from "node:path";
 
 /** 单个任务的输入；目录中的不可导入项保留跳过原因。 */
 interface StartJob {
@@ -48,9 +47,7 @@ async function resolveStartJobs(input: string): Promise<StartJob[]> {
   }
   return [{
     path: resolved.value,
-    displayName: resolved.kind === "web" || resolved.kind === "onlinePdf"
-      ? resolved.value
-      : path.basename(resolved.value),
+    displayName: resolved.displayName,
     kind: resolved.kind,
   }];
 }

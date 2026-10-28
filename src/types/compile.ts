@@ -14,4 +14,7 @@ export interface ExtractAllConceptsOptions {
 
   /** 本轮编译时间；未指定时使用函数调用时的当前时间。 */
   extractedAt?: string;
+
+  /** 设置后以相对于该目录的路径记录来源，避免子目录同名文件混淆。 */
+  sourcesDirectory?: string;
 }

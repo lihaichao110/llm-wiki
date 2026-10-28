@@ -8,11 +8,10 @@ export type StartInputKind = "web" | "onlinePdf" | "localPdf" | "localText" | "l
 /** 可通过文件扩展名识别并直接导入的本地文件类型。 */
 export type LocalFileInputKind = Exclude<StartInputKind, "web" | "onlinePdf" | "localDirectory">;
 
-/** 已识别的输入，value 为 URL 或本地文件/目录的真实绝对路径。 */
-export interface ResolvedStartInput {
-  kind: StartInputKind;
-  value: string;
-}
+/** 已识别的输入；可导入项同时提供任务显示名，目录由扫描结果提供逐项显示名。 */
+export type ResolvedStartInput =
+  | { kind: "localDirectory"; value: string }
+  | { kind: Exclude<StartInputKind, "localDirectory">; value: string; displayName: string };
 
 /** 本地扩展名与处理器类型的映射，扩展名统一使用小写。 */
 export const LOCAL_INPUT_KINDS: Readonly<Record<string, LocalFileInputKind | undefined>> = {
@@ -27,7 +26,7 @@ export const LOCAL_INPUT_KINDS: Readonly<Record<string, LocalFileInputKind | und
  * 识别 URL、本地文件或目录，并为 start 命令选择处理器。
  *
  * @param input 命令行传入的 URL 或文件路径。
- * @returns 输入类型及可直接交给处理器的地址。
+ * @returns 输入类型、可直接交给处理器的地址，以及可导入项的显示名。
  * @throws URL 无效、路径不存在或单文件格式不支持时抛出错误。
  */
 export async function resolveStartInput(input: string): Promise<ResolvedStartInput> {
@@ -41,6 +40,7 @@ export async function resolveStartInput(input: string): Promise<ResolvedStartInp
     return {
       kind: isPdfUrl(input) ? "onlinePdf" : "web",
       value: input,
+      displayName: input,
     };
   }
 
@@ -73,5 +73,6 @@ export async function resolveStartInput(input: string): Promise<ResolvedStartInp
     throw new Error(`不支持的本地文件类型：${extension || "无扩展名"}`);
   }
 
-  return { kind, value: await realpath(absolutePath) };
+  const realPath = await realpath(absolutePath);
+  return { kind, value: realPath, displayName: path.basename(realPath) };
 }

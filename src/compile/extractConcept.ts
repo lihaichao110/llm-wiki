@@ -9,6 +9,7 @@ import {
 import { parseConceptExtractionJson } from "./parseConceptExtraction";
 import { extractFilePath } from "@/utils/name";
 import { ExtractAllConceptsOptions } from "@/types/compile";
+import path from "node:path";
 
 /**
  * 使用大模型从一篇 source 文档中提取知识概念。
@@ -85,7 +86,12 @@ export async function extractAllConcepts(
       nextDocumentIndex += 1;
 
       const document = documents[documentIndex];
-      const sourceFileName = extractFilePath(document.filePath)
+      const sourceFileName = options.sourcesDirectory
+        ? path.relative(
+          path.resolve(process.cwd(), options.sourcesDirectory),
+          document.filePath,
+        ).split(path.sep).join("/")
+        : extractFilePath(document.filePath);
       const extractionResult = await extractConceptsFromDocument(
         document,
         provider,

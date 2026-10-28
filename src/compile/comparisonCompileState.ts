@@ -1,80 +1,46 @@
 import { SourceDocument } from "@/types/document";
-import { existsSync, readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createSourceHash } from "./createSourceHash";
-import { extractFilePath } from "@/utils/name";
 
-/** 编译状态文件路径，相对于执行命令时的工作目录。 */
-export const STATE_JSON = '.llmwiki/state.json'
-
-/**
- * 读取当前编译状态文件。
- *
- * @returns 状态文件存在时返回其 UTF-8 文本内容，否则返回 `false`。
- * @throws 状态文件存在但无法读取时，抛出文件系统异常。
- */
-export function StateFile() {
-  return existsSync(STATE_JSON) && readFileSync(STATE_JSON, { encoding: 'utf-8' })
-}
+/** 编译成功状态文件路径，相对于执行命令时的工作目录。 */
+export const STATE_JSON = ".llmwiki/state.json";
 
 /**
- * 比较 source 文档与上次成功编译时保存的哈希，判断是否需要重新编译。
+ * 为完整的 source 快照生成状态文件，不继承上轮已删除的资料。
  *
- * @param document 待编译的 source 文档。
- * @returns 文档发生变化或不存在历史状态时返回 `true`。
- * @throws 文档内容未发生变化时抛出跳过编译的提示；状态文件格式无效时抛出解析异常。
+ * @param documents 本轮成功解析并参与编译的全部资料。
+ * @param sourcesDirectory 本轮扫描的 sources 目录。
+ * @returns 可写入状态文件的 JSON；键为 sources 下的相对路径。
+ * @throws 文档路径超出 sources 目录时抛出错误。
  */
-export function loadCompileState(document: SourceDocument) {
-  try {
-    const fileName = extractFilePath(document.filePath)
-    const newDocumentHash = createSourceHash({
-      fileName,
-      content: document.content
-    })
+export function serializeCompileState(
+  documents: readonly SourceDocument[],
+  sourcesDirectory = "sources",
+): string {
+  const sourceRoot = path.resolve(process.cwd(), sourcesDirectory);
+  /** 每轮从空对象构建，以便删除旧版 basename 键和已删除资料。 */
+  const sources: Record<string, { hash: string }> = {};
 
-    const currentStateFile = StateFile()
-    const stateFile = currentStateFile ? JSON.parse(currentStateFile) : {}
-    const oldDocumentHash = stateFile.sources?.[fileName]?.hash
-
-    if (newDocumentHash === oldDocumentHash) {
-      throw new Error(`${fileName} 文件未发生变化，自动跳过编译`)
+  for (const document of documents) {
+    const relativePath = path.relative(sourceRoot, path.resolve(document.filePath));
+    if (
+      !relativePath
+      || relativePath === ".."
+      || relativePath.startsWith(`..${path.sep}`)
+      || path.isAbsolute(relativePath)
+    ) {
+      throw new Error(`source 路径超出 sources 目录：${document.filePath}`);
     }
-    return true
-  } catch (error: any) {
-    throw error;
-  }
-}
 
-/**
- * 保存 source 文档的最新哈希，供后续编译判断是否发生变化。
- *
- * 写入时会保留其他 source 文件的状态，并在必要时创建 `.llmwiki` 目录。
- *
- * @param document 已完成编译的 source 文档。
- * @returns 状态文件写入完成后兑现的 Promise。
- * @throws 状态文件格式无效或目录、文件无法写入时抛出异常。
- */
-export async function saveCompileState(document: SourceDocument) {
-  const fileName = extractFilePath(document.filePath)
-  const hash = createSourceHash({
-    fileName,
-    content: document.content
-  })
-
-  const currentStateFile = StateFile()
-  const stateFile = currentStateFile ? JSON.parse(currentStateFile) : {}
-  /** 合并已有记录，避免更新单个文档时丢失其他 source 的编译状态。 */
-  const sources = {
-    ...(stateFile?.sources || {}),
-    [fileName]: {
-      hash
-    }
+    const sourceKey = relativePath.split(path.sep).join("/");
+    sources[sourceKey] = {
+      // Frontmatter 也会影响提取结果，不能只比较正文。
+      hash: createSourceHash({
+        frontmatter: document.frontmatter,
+        content: document.content,
+      }),
+    };
   }
 
-  const stateFileValue = JSON.stringify({ sources })
-
-  /** 确保状态文件的父目录存在。 */
-  await mkdir(path.dirname(STATE_JSON), { recursive: true });
-  await writeFile(STATE_JSON, stateFileValue, 'utf8')
+  return JSON.stringify({ sources });
 }

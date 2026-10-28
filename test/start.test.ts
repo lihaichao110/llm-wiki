@@ -86,22 +86,27 @@ test("start 按 URL 和本地文件扩展名选择处理器", async () => {
     assert.deepEqual(await resolveStartInput("https://example.com/article"), {
       kind: "web",
       value: "https://example.com/article",
+      displayName: "https://example.com/article",
     });
     assert.deepEqual(await resolveStartInput("https://example.com/report.PDF?download=1"), {
       kind: "onlinePdf",
       value: "https://example.com/report.PDF?download=1",
+      displayName: "https://example.com/report.PDF?download=1",
     });
     assert.deepEqual(await resolveStartInput(textPath), {
       kind: "localText",
       value: textPath,
+      displayName: "NOTE.TXT",
     });
     assert.deepEqual(await resolveStartInput(markdownPath), {
       kind: "localMarkdown",
       value: markdownPath,
+      displayName: "article.MD",
     });
     assert.deepEqual(await resolveStartInput(pdfPath), {
       kind: "localPdf",
       value: pdfPath,
+      displayName: "report.PDF",
     });
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -120,6 +125,23 @@ test("start 对无效单文件输入给出明确错误", async () => {
     assert.deepEqual(await resolveStartInput(root), { kind: "localDirectory", value: root });
     await assert.rejects(resolveStartInput(otherPath), /不支持的本地文件类型：\.csv/);
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("单文件导入失败时使用识别结果中的显示名", async () => {
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "llm-wiki-file-error-")));
+  const previousCwd = process.cwd();
+  process.chdir(root);
+  try {
+    const filePath = path.join(root, "!!!.txt");
+    await writeFile(filePath, "无效标题", "utf8");
+
+    const summary = await runStartImport(filePath, 1, true);
+    assert.equal(summary.errors.length, 1);
+    assert.equal(summary.errors[0].name, "!!!.txt");
+  } finally {
+    process.chdir(previousCwd);
     await rm(root, { recursive: true, force: true });
   }
 });
