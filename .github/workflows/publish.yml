@@ -105,8 +105,8 @@ jobs:
         timeout-minutes: 20
         env:
           TAG_NAME: ${{ steps.release.outputs.tag }}
-          RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
-          RELEASE_NOTES_BASE_URL: ${{ vars.RELEASE_NOTES_BASE_URL }}
+          RELEASE_NOTES_MODEL: ${{ secrets.RELEASE_NOTES_MODEL }}
+          RELEASE_NOTES_BASE_URL: ${{ secrets.RELEASE_NOTES_BASE_URL }}
           RELEASE_NOTES_API_KEY: ${{ secrets.RELEASE_NOTES_API_KEY }}
         run: pnpm exec tsx scripts/generateReleaseNotes.ts "${TAG_NAME}" > "${RUNNER_TEMP}/release-notes.md"
 
