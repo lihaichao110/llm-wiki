@@ -24,8 +24,8 @@ import { publishSnapshot, StagedArtifact } from "./publishSnapshot";
 export interface ReplaceWikiConceptFilesOptions {
   /** 相对于当前工作目录的目标目录。 */
   outputDirectory?: string;
-  /** 编译命令传入完整成功状态；独立替换概念时省略。 */
-  stateContent?: string;
+  /** 编译命令传入完整成功状态；回调可读取实际写出的文件名和创建时间。 */
+  stateContent?: string | ((outputFiles: string[], concepts: readonly WikiConcept[]) => string);
   /** 状态文件路径，默认 `STATE_JSON`。 */
   stateFilePath?: string;
 }
@@ -210,9 +210,12 @@ export async function replaceWikiConceptFiles(
   try {
     await writeConceptFiles(conceptsWithHistory, relativeStagingDirectory);
     await createIndexFiles(conceptsWithHistory, indexStagingPath);
-    /** 状态先写入临时文件，但直到 Wiki 与索引发布成功后才替换旧状态。 */
+    /** 状态记录实际输出文件和保留的创建时间，并且最后才替换旧状态。 */
     if (stateStagingPath !== undefined && options.stateContent !== undefined) {
-      await writeFile(stateStagingPath, options.stateContent, "utf8");
+      const stateContent = typeof options.stateContent === "function"
+        ? options.stateContent(await readdir(stagingDirectory), conceptsWithHistory)
+        : options.stateContent;
+      await writeFile(stateStagingPath, stateContent, "utf8");
     }
 
     const artifacts: StagedArtifact[] = [

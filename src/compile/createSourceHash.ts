@@ -6,8 +6,8 @@ import { createHash } from "node:crypto";
  * 对规范化的 Frontmatter 和正文序列化，供成功状态记录使用。
  *
  * @param config source 的 Frontmatter 与正文。
- * @returns 带算法前缀的十六进制哈希。
- * @throws 文件不存在或无法读取时抛出文件系统异常。
+ * @returns SHA-256 十六进制哈希。
+ * @throws 缺少配置参数时抛出错误。
  */
 export function createSourceHash(
   config: Record<string, unknown>,

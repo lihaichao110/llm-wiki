@@ -203,11 +203,11 @@ function collectCandidateContext(group: ConceptCandidateGroup): {
  * 单候选直接转换，多候选通过模型综合语义字段。任何一组失败都会终止整轮编译。
  *
  * @param groups 已按规范化名称整理的候选分组。
- * @param provider 本轮编译共用的大模型实现。
+ * @param provider 多候选分组使用的模型；单候选分组无需提供。
  */
 export async function mergeConceptCandidateGroups(
   groups: readonly ConceptCandidateGroup[],
-  provider: LlmProvider,
+  provider?: LlmProvider,
 ): Promise<WikiConcept[]> {
   const concepts: WikiConcept[] = [];
 
@@ -216,10 +216,13 @@ export async function mergeConceptCandidateGroups(
       throw new Error(`概念分组 ${group.normalizedName} 不包含候选`);
     }
 
+    if (group.candidates.length > 1 && !provider) {
+      throw new Error(`概念分组 ${group.normalizedName} 需要合并模型`);
+    }
     const semanticConcept = group.candidates.length === 1
       ? group.candidates[0].concept
       : parseMergedConcept(
-        await provider.generateText(buildConceptMergeMessages(group), {
+        await provider!.generateText(buildConceptMergeMessages(group), {
           responseFormat: "json",
           temperature: 0,
         }),

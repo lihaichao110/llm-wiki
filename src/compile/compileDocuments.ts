@@ -1,72 +1,181 @@
-import { SourceDocument } from "@/types/document";
 import { ExtractAllConceptsOptions } from "@/types/compile";
-import { ConceptCandidate } from "@/types/concept";
+import { ConceptCandidate, WikiConcept } from "@/types/concept";
+import { SourceDocument } from "@/types/document";
 import { LlmProvider } from "@/types/provider";
-import { serializeCompileState } from "./comparisonCompileState";
+import { normalizeConceptName } from "@/utils/name";
+import {
+  CachedGroup, CachedSource, CompileState, groupSignature, hasCompleteOutput,
+  readCompileState, sourceInputHash, sourceKeyFor,
+} from "./comparisonCompileState";
 import { extractAllConcepts } from "./extractConcept";
 import { mergeConceptCandidateGroups, mergeConceptCandidates } from "./mergeConceptCandidates";
 import { replaceWikiConceptFiles } from "./replaceWikiConceptFiles";
 
-/** 一轮全量编译的输入与输出路径。 */
+/** 编译输入及可覆盖的路径与提取器。 */
 export interface CompileDocumentsOptions {
   concurrency: number;
   modelId: string;
+  baseURL?: string;
+  force?: boolean;
   sourcesDirectory?: string;
   outputDirectory?: string;
   stateFilePath?: string;
-  /** CLI 可接入逐文件任务展示；默认使用内部并发提取器。 */
   extractCandidates?: (
-    documents: readonly SourceDocument[],
-    provider: LlmProvider,
+    documents: readonly SourceDocument[], provider: LlmProvider,
     options: ExtractAllConceptsOptions,
   ) => Promise<ConceptCandidate[]>;
-  /** 通知调用方合并或发布阶段开始，用于更新终端进度。 */
   onPhaseStart?: (phase: "merge" | "publish") => void;
 }
 
+/** 本轮对 source 和概念组实际执行的工作。 */
+export interface CompileResult {
+  candidateCount: number;
+  conceptCount: number;
+  added: number;
+  changed: number;
+  deleted: number;
+  reusedSources: number;
+  reusedGroups: number;
+  rebuiltGroups: number;
+  skipped: boolean;
+}
+
 /**
- * 对完整的 source 快照提取、合并并发布 Wiki 与成功状态。
- *
- * @param documents 本轮扫描到的全部有效资料；空数组由调用方跳过。
- * @param provider 提取与跨来源合并共用的模型。
- * @param options 并发量、模型标识和测试可指定的路径。
- * @returns 本轮候选与最终概念的数量。
- * @throws 任一模型或发布阶段失败时保留旧快照并抛出异常。
+ * 仅提取变化的 source、综合变化的概念组，最后发布完整 Wiki 快照。
+ * 模型或发布失败时，旧状态和产物由发布器保留或回滚。
+ * @param documents 当前全部有效 source。
+ * @param provider 按需创建或直接使用的模型实现。
+ * @param options 并发数、模型配置和输出路径。
+ * @returns 提取与综合的复用统计。
+ * @throws 输入、模型或发布失败时抛错并保留旧状态。
  */
 export async function compileDocuments(
   documents: readonly SourceDocument[],
-  provider: LlmProvider,
+  provider: LlmProvider | (() => LlmProvider),
   options: CompileDocumentsOptions,
-): Promise<{ candidateCount: number; conceptCount: number }> {
-  if (documents.length === 0) {
-    throw new Error("没有可编译的 source，保留现有 Wiki");
+): Promise<CompileResult> {
+  if (documents.length === 0) throw new Error("没有可编译的 source，保留现有 Wiki");
+  const root = options.sourcesDirectory ?? "sources";
+  const saved = await readCompileState(options.stateFilePath);
+  const previous = options.force ? null : saved;
+  const modelId = options.modelId.trim();
+  const baseURL = (options.baseURL ?? "").trim().replace(/\/+$/, "");
+  /** 先为全部资料建立相对路径和输入哈希，后续比较与候选排序都用这一份快照。 */
+  const current = new Map<string, { document: SourceDocument; hash: string }>();
+  for (const document of documents) {
+    const key = sourceKeyFor(document, root);
+    if (current.has(key)) throw new Error(`重复的 source 路径：${key}`);
+    current.set(key, { document, hash: sourceInputHash(document) });
   }
 
-  /** 先计算完整状态，确保路径错误不会发生在 Wiki 发布之后。 */
-  const stateContent = serializeCompileState(
-    documents, options.sourcesDirectory ?? "sources",
-  );
-  const candidates = await (options.extractCandidates ?? extractAllConcepts)(documents, provider, {
-    concurrency: options.concurrency,
-    modelId: options.modelId,
-    sourcesDirectory: options.sourcesDirectory ?? "sources",
-  });
-  if (candidates.length === 0) {
-    throw new Error("所有 source 均未提取到概念，保留现有 Wiki");
+  /** 统计相对上次成功状态的变化；--force 只禁用复用，不改变新增或删除的判断。 */
+  let added = 0;
+  let changed = 0;
+  let reusedSources = 0;
+  for (const [key, item] of current) {
+    if (!saved?.sources[key]) added += 1;
+    else if (options.force || saved.sources[key].hash !== item.hash) changed += 1;
+    if (previous?.sources[key]?.hash === item.hash) reusedSources += 1;
+  }
+  const deleted = Object.keys(saved?.sources ?? {}).filter((key) => !current.has(key)).length;
+  const sourceChanged = !previous || added + changed + deleted > 0;
+  /** source 与产物都未变时直接结束，避免创建 Provider 或改写任何文件。 */
+  const outputComplete = previous && !sourceChanged
+    && await hasCompleteOutput(previous, options.outputDirectory);
+  if (outputComplete) {
+    return {
+      candidateCount: Object.values(previous.sources).reduce((n, item) => n + item.candidates.length, 0),
+      conceptCount: Object.keys(previous.groups).length,
+      added, changed, deleted, reusedSources,
+      reusedGroups: Object.keys(previous.groups).length, rebuiltGroups: 0, skipped: true,
+    };
+  }
+  /** source 集合或内容变化时禁止混用不同模型的缓存；纯恢复产物仍可使用旧缓存。 */
+  if (sourceChanged && previous && (previous.modelId !== modelId || previous.baseURL !== baseURL)) {
+    throw new Error("模型或接口配置与上轮缓存不同，请运行 llm-wiki compile --force 全量刷新");
+  }
+  /** 仅修复缺失产物时保留缓存原有模型配置，避免把旧结果标记成新模型。 */
+  const stateModelId = !sourceChanged && previous ? previous.modelId : modelId;
+  const stateBaseURL = !sourceChanged && previous ? previous.baseURL : baseURL;
+
+  /** Provider 延迟创建，缓存恢复和无变化运行均不需要 API 配置。 */
+  let instance: LlmProvider | undefined;
+  const getProvider = (): LlmProvider => {
+    instance ??= typeof provider === "function" ? provider() : provider;
+    return instance;
+  };
+
+  /** 按 source 的相对路径复用候选，只有哈希变化的文件进入提取队列。 */
+  const sources: Record<string, CachedSource> = {};
+  const toExtract: SourceDocument[] = [];
+  for (const [key, item] of current) {
+    const cached = previous?.sources[key];
+    if (cached?.hash === item.hash) sources[key] = cached;
+    else toExtract.push(item.document);
+  }
+  if (toExtract.length > 0) {
+    /** 提取器返回平坦列表，这里按来源分回各文件，空列表也记为成功缓存。 */
+    const extracted = await (options.extractCandidates ?? extractAllConcepts)(
+      toExtract, getProvider(), { concurrency: options.concurrency, modelId, sourcesDirectory: root },
+    );
+    const bySource = new Map(toExtract.map((doc) => [sourceKeyFor(doc, root), [] as ConceptCandidate[]]));
+    for (const candidate of extracted) {
+      const group = bySource.get(candidate.sourceFileName);
+      if (!group || candidate.modelId !== modelId) {
+        throw new Error(`提取结果的来源或模型不匹配：${candidate.sourceFileName}`);
+      }
+      group.push(candidate);
+    }
+    for (const [key, candidates] of bySource) {
+      sources[key] = { hash: current.get(key)!.hash, candidates };
+    }
   }
 
-  options.onPhaseStart?.("merge");
-  const groups = mergeConceptCandidates(candidates);
-  const concepts = await mergeConceptCandidateGroups(groups, provider);
-  if (concepts.length === 0) {
-    throw new Error("概念合并结果为空，保留现有 Wiki");
+  /** 从当前所有 source 重新分组，删除的来源自然不会留在 Wiki 中。 */
+  const orderedSources = Object.fromEntries([...current.keys()].map((key) => [key, sources[key]]));
+  const candidates = Object.values(orderedSources).flatMap((item) => item.candidates);
+  if (candidates.length === 0) throw new Error("所有 source 均未提取到概念，保留现有 Wiki");
+  const candidateGroups = mergeConceptCandidates(candidates);
+  const groups: Record<string, CachedGroup> = {};
+  let reusedGroups = 0;
+  let rebuiltGroups = 0;
+  /** 候选签名未变就直接复用综合结果，其他组才重新综合。 */
+  for (const group of candidateGroups) {
+    const signature = groupSignature(group);
+    const cached = previous?.groups[group.normalizedName];
+    if (cached?.signature === signature) {
+      groups[group.normalizedName] = cached;
+      reusedGroups += 1;
+      continue;
+    }
+    if (rebuiltGroups === 0) options.onPhaseStart?.("merge");
+    const [concept] = await mergeConceptCandidateGroups(
+      [group], group.candidates.length > 1 ? getProvider() : undefined,
+    );
+    groups[group.normalizedName] = { signature, concept };
+    rebuiltGroups += 1;
   }
+  const concepts = candidateGroups.map((group) => groups[group.normalizedName].concept);
 
+  /** 发布器把实际文件名与保留的 createdAt 一并写进同一份成功状态。 */
   options.onPhaseStart?.("publish");
   await replaceWikiConceptFiles(concepts, {
     outputDirectory: options.outputDirectory,
-    stateContent,
     stateFilePath: options.stateFilePath,
+    stateContent: (outputFiles, published) => {
+      const publishedByName = new Map<string, WikiConcept>(
+        published.map((concept) => [normalizeConceptName(concept.name), concept]),
+      );
+      for (const [key, group] of Object.entries(groups)) {
+        group.concept = publishedByName.get(key) ?? group.concept;
+      }
+      const state: CompileState = {
+        version: 2, modelId: stateModelId, baseURL: stateBaseURL,
+        sources: orderedSources, groups, outputFiles: outputFiles.sort(),
+      };
+      return JSON.stringify(state);
+    },
   });
-  return { candidateCount: candidates.length, conceptCount: concepts.length };
+  return { candidateCount: candidates.length, conceptCount: concepts.length,
+    added, changed, deleted, reusedSources, reusedGroups, rebuiltGroups, skipped: false };
 }

@@ -1,6 +1,8 @@
 export interface CompileOptions {
   /** 并发编译数 */
   concurrency: number;
+  /** 忽略上次成功缓存，重新提取与合并全部资料。 */
+  force: boolean;
 }
 
 

@@ -57,6 +57,7 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 | `llm-wiki start <input> --concurrency <数量>` | 递归导入文件夹时设置同时处理的任务数量，默认 3。 |
 | `llm-wiki compile` | 将 `sources/` 中的 Markdown 资料整理为 `wiki/` 下的 Wiki 内容。 |
 | `llm-wiki compile --concurrency <数量>` | 编译资料，并设置同时处理的任务数量。 |
+| `llm-wiki compile --force` | 忽略上次成功缓存，重新提取并合并全部资料。 |
 | `llm-wiki view` | 在浏览器中查看 `wiki/concepts/` 的概念关系图。 |
 | `llm-wiki vector` | 为 `wiki/concepts/` 中的内容生成向量，保存到 `.llmwiki/embedding.json`。 |
 | `llm-wiki query <question>` | 检索向量索引，并根据相关 Wiki 内容生成带来源的回答。 |
