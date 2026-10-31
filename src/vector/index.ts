@@ -7,13 +7,19 @@ import { Listr } from "listr2";
 import { saveEmbeddings } from "./saveEmbeddings";
 import type { EmbeddingInfo } from "@/types/embedding";
 
+/** 本轮成功写入索引的概念文件与向量数量。 */
+export interface VectorResult {
+  fileCount: number;
+  embeddingCount: number;
+}
+
 /**
- * 初始化项目根目录中的向量数据存储目录。
+ * 为全部概念生成向量，并在全部成功后替换项目的向量索引。
  *
- * @returns 目录创建完成后结束；失败时将错误交由 CLI 统一处理。
- * @throws 文件系统无法创建目录时抛出原始错误。
+ * @returns 成功写入的文件和向量数量；空概念目录返回零且不改写索引。
+ * @throws 任一文件向量化或写入失败时抛错并保留旧索引。
  */
-export default async function initializeVectorStorage() {
+export default async function initializeVectorStorage(): Promise<VectorResult> {
   /** 向量数据的约定存储位置，基于执行 CLI 时的项目目录解析。 */
   const storageDirectory = path.resolve(process.cwd(), '.llmwiki');
   /** Wiki 概念 Markdown 文件的来源目录。 */
@@ -29,7 +35,7 @@ export default async function initializeVectorStorage() {
 
   if (markdownFiles.length === 0) {
     console.log(chalk.yellow("目录【wiki/concepts】中没有可向量化的 Markdown 文件。"));
-    return;
+    return { fileCount: 0, embeddingCount: 0 };
   }
 
   console.log(chalk.green(`目录【wiki/concepts】扫描完成，可向量化文件数量：${markdownFiles.length}`));
@@ -68,20 +74,15 @@ export default async function initializeVectorStorage() {
     },
   );
 
-  await embeddingTasks.run();
-
-  /** 跳过失败文件，只汇总本次成功完成的向量记录。 */
-  const successfulEmbeddings = embeddingsByFile.flatMap((embeddings) => embeddings ?? []);
-  const successfulFileCount = embeddingsByFile.filter((embeddings) => embeddings !== undefined).length;
-
-  if (successfulFileCount > 0) {
-    const outputPath = await saveEmbeddings(successfulEmbeddings, storageDirectory);
-
-    console.log(chalk.green(`向量保存成功：${successfulEmbeddings.length} 条，文件：${outputPath}`));
+  try {
+    await embeddingTasks.run();
+  } catch (error) {
+    // 不同渲染器可能在收集失败后抛错或正常返回；两种情况都要检查失败列表。
+    if (processingErrors.length === 0) throw error;
   }
 
   if (processingErrors.length > 0) {
-    // 在成功保存提示之后逐项列出失败文件，便于用户同时确认两类结果。
+    // 任一文件失败都不能把已成功的部分发布成新索引。
     console.log(chalk.yellow("以下文件处理失败："));
     for (const error of processingErrors) {
       console.log(chalk.red(`- ${error.message}`));
@@ -94,4 +95,10 @@ export default async function initializeVectorStorage() {
         .join("；")}`,
     );
   }
+
+  /** 全部文件成功后再汇总和原子替换，避免旧索引被不完整结果覆盖。 */
+  const embeddings = embeddingsByFile.flatMap((items) => items ?? []);
+  const outputPath = await saveEmbeddings(embeddings, storageDirectory);
+  console.log(chalk.green(`向量保存成功：${embeddings.length} 条，文件：${outputPath}`));
+  return { fileCount: markdownFiles.length, embeddingCount: embeddings.length };
 }

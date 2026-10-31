@@ -4,8 +4,8 @@ import { SourceDocument } from "@/types/document";
 import { LlmProvider } from "@/types/provider";
 import { normalizeConceptName } from "@/utils/name";
 import {
-  CachedGroup, CachedSource, CompileState, groupSignature, hasCompleteOutput,
-  readCompileState, sourceInputHash, sourceKeyFor,
+  CachedGroup, CachedSource, CompileState, compareSourceDocuments, groupSignature,
+  hasCompleteOutput, readCompileState, sourceKeyFor,
 } from "./comparisonCompileState";
 import { extractAllConcepts } from "./extractConcept";
 import { mergeConceptCandidateGroups, mergeConceptCandidates } from "./mergeConceptCandidates";
@@ -60,24 +60,11 @@ export async function compileDocuments(
   const previous = options.force ? null : saved;
   const modelId = options.modelId.trim();
   const baseURL = (options.baseURL ?? "").trim().replace(/\/+$/, "");
-  /** 先为全部资料建立相对路径和输入哈希，后续比较与候选排序都用这一份快照。 */
-  const current = new Map<string, { document: SourceDocument; hash: string }>();
-  for (const document of documents) {
-    const key = sourceKeyFor(document, root);
-    if (current.has(key)) throw new Error(`重复的 source 路径：${key}`);
-    current.set(key, { document, hash: sourceInputHash(document) });
-  }
-
-  /** 统计相对上次成功状态的变化；--force 只禁用复用，不改变新增或删除的判断。 */
-  let added = 0;
-  let changed = 0;
-  let reusedSources = 0;
-  for (const [key, item] of current) {
-    if (!saved?.sources[key]) added += 1;
-    else if (options.force || saved.sources[key].hash !== item.hash) changed += 1;
-    if (previous?.sources[key]?.hash === item.hash) reusedSources += 1;
-  }
-  const deleted = Object.keys(saved?.sources ?? {}).filter((key) => !current.has(key)).length;
+  /** 检查阶段与编译共用一份比较口径；强制编译仍把已存在资料计为重新处理。 */
+  const comparison = compareSourceDocuments(documents, saved, root);
+  const { current, added, deleted } = comparison;
+  const changed = comparison.changed + (options.force ? comparison.unchanged : 0);
+  const reusedSources = options.force ? 0 : comparison.unchanged;
   const sourceChanged = !previous || added + changed + deleted > 0;
   /** source 与产物都未变时直接结束，避免创建 Provider 或改写任何文件。 */
   const outputComplete = previous && !sourceChanged

@@ -43,8 +43,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "files": [
-    "dist",
-    "CHANGELOG.md"
+    "dist"
   ],
   "type": "module",
   "devDependencies": {

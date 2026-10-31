@@ -21,17 +21,7 @@ jobs:
           # 手动发布时要从完整历史中确定 main 上最新的版本 tag。
           fetch-depth: 0
 
-      - name: 配置 pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: 配置 Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
-          registry-url: https://registry.npmjs.org/
-          cache: pnpm
-
-      - name: 确定发布 tag 和版本
+      - name: 确定并检出发布 tag
         id: release
         shell: bash
         run: |
@@ -52,16 +42,46 @@ jobs:
             exit 1
           fi
 
+          # 后续读取 package.json、代码差异和构建产物时都使用目标 tag。
+          git checkout --detach "${tag}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "准备发布 ${tag}，代码来源：$(git rev-parse --short HEAD)。"
+
+      - name: 配置 pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org/
+          cache: pnpm
+
+      - name: 校验发布版本
+        shell: bash
+        env:
+          TAG_NAME: ${{ steps.release.outputs.tag }}
+        run: |
           package_version="$(node -p "require('./package.json').version")"
-          tag_version="${tag#v}"
+          tag_version="${TAG_NAME#v}"
           if [[ "${package_version}" != "${tag_version}" ]]; then
-            echo "package.json 版本 ${package_version} 与发布 tag ${tag} 不一致。" >&2
+            echo "package.json 版本 ${package_version} 与发布 tag ${TAG_NAME} 不一致。" >&2
             exit 1
           fi
 
-          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-          echo "version=${package_version}" >> "${GITHUB_OUTPUT}"
-          echo "准备发布 ${tag}（${package_version}），代码来源：${GITHUB_REF_NAME}。"
+      - name: 检查 GitHub Release
+        id: github_release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.release.outputs.tag }}
+        run: |
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+            echo "GitHub Release ${TAG_NAME} 已存在，保留现有正文。"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: 检查 npm 版本
         id: npm
@@ -77,8 +97,18 @@ jobs:
           fi
 
       - name: 安装依赖
-        if: steps.npm.outputs.published == 'false'
+        if: steps.github_release.outputs.exists == 'false' || steps.npm.outputs.published == 'false'
         run: pnpm install --frozen-lockfile
+
+      - name: 根据代码差异生成 Release 说明
+        if: steps.github_release.outputs.exists == 'false'
+        timeout-minutes: 20
+        env:
+          TAG_NAME: ${{ steps.release.outputs.tag }}
+          RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
+          RELEASE_NOTES_BASE_URL: ${{ vars.RELEASE_NOTES_BASE_URL }}
+          RELEASE_NOTES_API_KEY: ${{ secrets.RELEASE_NOTES_API_KEY }}
+        run: pnpm exec tsx scripts/generateReleaseNotes.ts "${TAG_NAME}" > "${RUNNER_TEMP}/release-notes.md"
 
       - name: 构建发布产物
         if: steps.npm.outputs.published == 'false'
@@ -91,13 +121,9 @@ jobs:
         run: npm stage publish
 
       - name: 创建 GitHub Release
+        if: steps.github_release.outputs.exists == 'false'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ steps.release.outputs.tag }}
-        run: |
-          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
-            echo "GitHub Release ${TAG_NAME} 已存在，跳过创建。"
-          else
-            gh release create "${TAG_NAME}" --verify-tag --generate-notes --title "${TAG_NAME}"
-          fi
+        run: gh release create "${TAG_NAME}" --verify-tag --notes-file "${RUNNER_TEMP}/release-notes.md" --title "${TAG_NAME}"

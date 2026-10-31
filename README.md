@@ -12,7 +12,7 @@
 
 ![llm-wiki 概念关系图，展示概念关联与详情](src/static/page.png)
 
-各版本的新增功能、修复与维护记录见 [更新日志](CHANGELOG.md)。
+各版本的新增功能、修复与维护记录见 [GitHub Releases](https://github.com/lihaichao110/llm-wiki/releases)。
 
 ## 环境要求
 
@@ -58,6 +58,7 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 | `llm-wiki compile` | 将 `sources/` 中的 Markdown 资料整理为 `wiki/` 下的 Wiki 内容。 |
 | `llm-wiki compile --concurrency <数量>` | 编译资料，并设置同时处理的任务数量。 |
 | `llm-wiki compile --force` | 忽略上次成功缓存，重新提取并合并全部资料。 |
+| `llm-wiki sync` | 检查现有资料、编译 Wiki，再完整更新向量索引。 |
 | `llm-wiki view` | 在浏览器中查看 `wiki/concepts/` 的概念关系图。 |
 | `llm-wiki vector` | 为 `wiki/concepts/` 中的内容生成向量，保存到 `.llmwiki/embedding.json`。 |
 | `llm-wiki query <question>` | 检索向量索引，并根据相关 Wiki 内容生成带来源的回答。 |
@@ -103,14 +104,16 @@ pnpm install --frozen-lockfile
 
 ### 日常发版
 
-在 `main` 分支人工更新 `CHANGELOG.md`，将“未发布”的变更整理到新版本章节，核对提交并提交文档变更。确认工作区干净、`pnpm run check` 通过后，更新版本并推送：
+在 `main` 分支核对待发布的代码改动。确认工作区干净、`pnpm run check` 通过后，更新版本并推送：
 
 ```bash
 pnpm version patch
 pnpm run release
 ```
 
-`pnpm version` 会生成版本提交和对应的 `v*` 标签；`pnpm run release` 会将 `main` 和标签推送到 `origin`。标签触发“发布 npm 包”工作流：校验标签与 `package.json` 的版本，安装依赖并构建，使用 `npm stage publish` 提交 npm 待审核版本，然后创建 GitHub Release。工作流使用仓库密钥 `NPM_TOKEN`；若该版本已存在于 npm，则跳过 npm 提交。
+`pnpm version` 会生成版本提交和对应的 `v*` 标签；`pnpm run release` 会将 `main` 和标签推送到 `origin`。标签触发“发布 npm 包”工作流：校验标签与 `package.json` 的版本，读取本次与上个版本标签之间的代码差异，调用模型生成中文 Release 说明，再构建并使用 `npm stage publish` 提交 npm 待审核版本，最后创建 GitHub Release。提交标题不参与说明生成；若模型调用或说明校验失败，工作流会在 npm 提交前停止。该版本已存在于 npm 时跳过 npm 提交；GitHub Release 已存在时保留原正文。
+
+首次使用前，在 GitHub 仓库的 Actions 配置中设置变量 `RELEASE_NOTES_MODEL`（模型名称）、`RELEASE_NOTES_BASE_URL`（OpenAI 兼容接口根地址）和密钥 `RELEASE_NOTES_API_KEY`，并保留 npm 发布密钥 `NPM_TOKEN`。生成说明时，版本间的代码差异会发送给所配置的模型接口。
 
 需要其他版本类型时，可将示例中的 `patch` 改为 `minor` 或 `major`；预发布版本按以下顺序递增：
 

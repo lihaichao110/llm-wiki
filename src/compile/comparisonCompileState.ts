@@ -54,6 +54,47 @@ export function sourceInputHash(document: SourceDocument): string {
   return createSourceHash({ title, source, sourceType, content: document.content });
 }
 
+/** 当前 source 与上轮成功状态的比较结果，供检查阶段和编译共用。 */
+export interface SourceComparison {
+  current: Map<string, { document: SourceDocument; hash: string }>;
+  added: number;
+  changed: number;
+  deleted: number;
+  unchanged: number;
+}
+
+/**
+ * 按进入模型的实际输入比较全部资料，避免检查和编译使用不同的变更口径。
+ * @param documents 当前有效的 source。
+ * @param saved 上轮成功状态；缺失时全部视为新增。
+ * @param sourcesDirectory source 根目录。
+ * @returns 路径与哈希快照，以及四类资料数量。
+ * @throws 同一路径重复出现或资料路径超出根目录时抛错。
+ */
+export function compareSourceDocuments(
+  documents: readonly SourceDocument[],
+  saved: CompileState | null,
+  sourcesDirectory = "sources",
+): SourceComparison {
+  /** 相对路径同时作为缓存键和删除检测的依据。 */
+  const current = new Map<string, { document: SourceDocument; hash: string }>();
+  let added = 0;
+  let changed = 0;
+  let unchanged = 0;
+  for (const document of documents) {
+    const key = sourceKeyFor(document, sourcesDirectory);
+    if (current.has(key)) throw new Error(`重复的 source 路径：${key}`);
+    const hash = sourceInputHash(document);
+    current.set(key, { document, hash });
+    const previousHash = saved?.sources[key]?.hash;
+    if (previousHash === undefined) added += 1;
+    else if (previousHash === hash) unchanged += 1;
+    else changed += 1;
+  }
+  const deleted = Object.keys(saved?.sources ?? {}).filter((key) => !current.has(key)).length;
+  return { current, added, changed, deleted, unchanged };
+}
+
 /**
  * 忽略提取时间，仅用实际参与综合的候选内容判断概念组是否变化。
  * @param group 当前候选分组。

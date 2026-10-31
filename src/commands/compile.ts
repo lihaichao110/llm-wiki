@@ -1,4 +1,4 @@
-import { compileDocuments } from "@/compile/compileDocuments";
+import { compileDocuments, CompileResult } from "@/compile/compileDocuments";
 import { extractAllConcepts } from "@/compile/extractConcept";
 import { readAllDocuments } from "@/compile/readSources";
 import { createProviderFromEnv } from "@/providers/createProviderFromEnv";
@@ -106,38 +106,52 @@ async function extractCandidatesWithListr(
   return candidateGroups.flat();
 }
 
+/**
+ * 为已有的完整资料列表运行编译，并展示提取、合并与发布进度。
+ * @param documents 已解析的当前全部 source。
+ * @param option 并发数与强制刷新选项。
+ * @returns 本轮编译和缓存复用统计。
+ * @throws 编译失败时保留旧 Wiki 和状态并继续抛错。
+ */
+export async function runCompile(
+  documents: readonly SourceDocument[],
+  option: CompileOptions,
+): Promise<CompileResult> {
+  const spinner = ora({ color: "cyan", text: chalk.green("🚀 开始编译 sources...") }).start();
+  try {
+    // Listr 独占动态终端区域，避免与 Ora 的单行刷新互相覆盖。
+    spinner.stop();
+    const result = await compileDocuments(documents, createProviderFromEnv, {
+      concurrency: option.concurrency,
+      modelId: process.env.LLM_MODEL ?? "",
+      baseURL: process.env.LLM_BASE_URL ?? "",
+      force: option.force,
+      extractCandidates: extractCandidatesWithListr,
+      onPhaseStart: (phase) => {
+        spinner.start(chalk.green(phase === "merge"
+          ? "正在合并重复概念..."
+          : "正在写入 Wiki 文件..."));
+      },
+    });
+    spinner.succeed(chalk.green(result.skipped
+      ? `资料未变化，已跳过编译：复用 ${result.reusedSources} 篇 source、${result.reusedGroups} 个概念组。`
+      : `编译完成：新增 ${result.added}、修改 ${result.changed}、删除 ${result.deleted}、复用 ${result.reusedSources} 篇 source；复用 ${result.reusedGroups}、重新生成 ${result.rebuiltGroups} 个概念组；共 ${result.candidateCount} 个候选、${result.conceptCount} 个概念。`));
+    return result;
+  } catch (error) {
+    spinner.fail(chalk.red("编译失败，已保留上一轮成功的 Wiki 和状态。"));
+    throw error;
+  }
+}
+
 program.command("compile")
   .option("-c, --concurrency <count>", "同时编译的 source 文件数量", parseConcurrency, 1)
   .option("--force", "忽略缓存，重新编译全部 source")
   .description("将 sources 中的 Markdown 编译为结构化 Wiki")
   .action(async (option: CompileOptions) => {
-    const spinner = ora({ color: "cyan", text: chalk.green("🚀 开始编译 sources...") }).start();
-    try {
-      const documents = await readAllDocuments();
-      if (documents.length === 0) {
-        spinner.warn(chalk.yellow("没有可编译的 source，保留现有 Wiki。"));
-        return;
-      }
-
-      // Listr 独占动态终端区域，避免与 Ora 的单行刷新互相覆盖。
-      spinner.stop();
-      const result = await compileDocuments(documents, createProviderFromEnv, {
-        concurrency: option.concurrency,
-        modelId: process.env.LLM_MODEL ?? "",
-        baseURL: process.env.LLM_BASE_URL ?? "",
-        force: option.force,
-        extractCandidates: extractCandidatesWithListr,
-        onPhaseStart: (phase) => {
-          spinner.start(chalk.green(phase === "merge"
-            ? "正在合并重复概念..."
-            : "正在写入 Wiki 文件..."));
-        },
-      });
-      spinner.succeed(chalk.green(result.skipped
-        ? `资料未变化，已跳过编译：复用 ${result.reusedSources} 篇 source、${result.reusedGroups} 个概念组。`
-        : `编译完成：新增 ${result.added}、修改 ${result.changed}、删除 ${result.deleted}、复用 ${result.reusedSources} 篇 source；复用 ${result.reusedGroups}、重新生成 ${result.rebuiltGroups} 个概念组；共 ${result.candidateCount} 个候选、${result.conceptCount} 个概念。`));
-    } catch (error) {
-      spinner.fail(chalk.red("编译失败，已保留上一轮成功的 Wiki 和状态。"));
-      throw error;
+    const documents = await readAllDocuments();
+    if (documents.length === 0) {
+      console.warn(chalk.yellow("没有可编译的 source，保留现有 Wiki。"));
+      return;
     }
+    await runCompile(documents, option);
   });
