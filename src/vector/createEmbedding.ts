@@ -13,7 +13,7 @@ export async function createEmbedding(input: string | string[], fileName: string
   if (!token) {
     throw new Error('缺少 OPENROUTER_API_KEY。请设置具有 Inference 权限的 OpenRouter Access Token。');
   }
-  // splitMarkdown 目前返回单个字符串；保留数组形式以兼容后续分块实现。
+  // 每个片段单独请求，以便响应与输入片段一一对应。
   const contents = typeof input === "string" ? [input] : input;
   if (contents.length === 0 || contents.some((content) => !content.trim())) {
     throw new Error("embedding 输入必须是非空文本或非空文本数组。");
@@ -35,7 +35,7 @@ export async function createEmbedding(input: string | string[], fileName: string
       });
 
       // 查询只接受可计算相似度的浮点向量，不能把 base64 或空结果写入索引。
-      if (typeof response === 'string' || !Array.isArray(response.data) || response.data.length === 0) {
+      if (typeof response === 'string' || !Array.isArray(response.data) || response.data.length !== 1) {
         throw new Error('未返回有效的浮点向量。');
       }
       for (const vectorItem of response.data) {

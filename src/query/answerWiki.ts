@@ -12,7 +12,7 @@ export interface WikiAnswer {
 }
 
 /**
- * 将问题和完整检索结果包装为模型消息。
+ * 将问题和有总量上限的片段检索结果包装为模型消息。
  *
  * @param question 用户提出的问题。
  * @param results 已按相似度排序的 Wiki 检索结果。
@@ -35,12 +35,16 @@ export function buildWikiAnswerMessages(
 7. 只返回合法 JSON，不要使用 Markdown 代码块或附加说明。格式必须是：{"answer":"回答内容","sourceIds":[1,2]}。
 `.trim();
 
-  // JSON 包装使问题、编号与 Wiki 原文的边界清晰，并保留完整正文供模型判断。
+  // JSON 包装使问题、片段位置与 Wiki 原文的边界清晰。
   const userPrompt = JSON.stringify({
     question,
     results: results.map((result, index) => ({
       id: index + 1,
       fileName: result.fileName,
+      sectionPath: result.sectionPath,
+      position: result.position,
+      startLine: result.startLine,
+      endLine: result.endLine,
       score: result.score,
       text: result.text,
     })),

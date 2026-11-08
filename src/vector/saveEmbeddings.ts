@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { mkdir, rename, rm, writeFile } from "fs/promises";
 import path from "path";
-import type { EmbeddingInfo } from "@/types/embedding";
+import type { ChunkEmbeddingInfo, EmbeddingIndex } from "@/types/embedding";
 
 /**
  * 将本次生成的向量记录原子写入 `.llmwiki/embedding.json`。
@@ -12,7 +12,7 @@ import type { EmbeddingInfo } from "@/types/embedding";
  * @throws 目录无法创建、JSON 无法写入或临时文件无法替换目标文件时抛出原始错误。
  */
 export async function saveEmbeddings(
-  embeddings: EmbeddingInfo[],
+  embeddings: ChunkEmbeddingInfo[],
   storageDirectory: string,
 ): Promise<string> {
   /** 最终存储位置；临时文件也放在同一目录以保证重命名具备原子性。 */
@@ -23,7 +23,8 @@ export async function saveEmbeddings(
   await mkdir(path.dirname(outputPath), { recursive: true });
 
   try {
-    await writeFile(temporaryPath, `${JSON.stringify(embeddings, null, 2)}\n`, {
+    const index: EmbeddingIndex = { version: 2, embeddings };
+    await writeFile(temporaryPath, `${JSON.stringify(index, null, 2)}\n`, {
       encoding: "utf8",
       flag: "wx",
     });

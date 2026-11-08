@@ -1,16 +1,22 @@
-import type { EmbeddingInfo } from '@/types/embedding';
+import type { ChunkEmbeddingInfo, EmbeddingIndex } from '@/types/embedding';
 import { createEmbedding } from '@/vector/createEmbedding';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 /** 单次最多交给模型的相关条目数量，控制检索上下文规模。 */
 const MAX_RESULTS = 6;
+/** 单次交给回答模型的片段正文总长度（UTF-16 字符）。 */
+export const MAX_CONTEXT_LENGTH = 6000;
 
 /** 可直接展示给用户的 Wiki 检索结果。 */
 export interface WikiSearchResult {
   fileName: string;
   text: string;
   score: number;
+  sectionPath: string[];
+  position: number;
+  startLine: number;
+  endLine: number;
 }
 
 /**
@@ -52,23 +58,45 @@ function cosineSimilarity(left: number[], right: number[]): number | null {
  *
  * @param queryEmbedding 问题的浮点向量。
  * @param embeddings 从向量文件读取的记录。
- * @returns 相似度由高到低排列的结果。
+ * @returns 相似度由高到低排列，且受条数与正文总量限制的结果。
  */
 export function rankWikiEmbeddings(
   queryEmbedding: number[],
-  embeddings: EmbeddingInfo[],
+  embeddings: ChunkEmbeddingInfo[],
 ): WikiSearchResult[] {
-  return embeddings.flatMap((item) => {
+  const ranked = embeddings.flatMap((item) => {
     // vector 命令写入浮点数组；旧文件或其他编码格式暂不参与检索。
-    if (!item || !Array.isArray(item.embedding) || typeof item.text !== 'string' || typeof item.file_name !== 'string') {
+    if (!item || !Array.isArray(item.embedding) || typeof item.text !== 'string' ||
+      typeof item.file_name !== 'string' || !Array.isArray(item.section_path) ||
+      !item.section_path.every((heading) => typeof heading === 'string') ||
+      !Number.isInteger(item.position) || !Number.isInteger(item.start_line) ||
+      !Number.isInteger(item.end_line)) {
       return [];
     }
 
     const score = cosineSimilarity(queryEmbedding, item.embedding);
-    return score === null ? [] : [{ fileName: item.file_name, text: item.text, score }];
+    return score === null
+      ? []
+      : [{
+        fileName: item.file_name,
+        text: item.text, score,
+        sectionPath: item.section_path,
+        position: item.position,
+        startLine: item.start_line,
+        endLine: item.end_line
+      }];
   })
-    .sort((left, right) => right.score - left.score)
-    .slice(0, MAX_RESULTS);
+    .sort((left, right) => right.score - left.score);
+
+  const results: WikiSearchResult[] = [];
+  let contextLength = 0;
+  for (const result of ranked) {
+    if (results.length === MAX_RESULTS) break;
+    if (contextLength + result.text.length > MAX_CONTEXT_LENGTH) continue;
+    results.push(result);
+    contextLength += result.text.length;
+  }
+  return results;
 }
 
 /**
@@ -98,11 +126,17 @@ export async function searchWiki(question: string): Promise<WikiSearchResult[]> 
     throw new Error('Wiki 向量索引不是有效的 JSON，请重新运行 llm-wiki vector。');
   }
 
-  if (!Array.isArray(parsed)) {
+  if (Array.isArray(parsed)) {
+    throw new Error('当前 Wiki 向量索引为旧版整篇格式，请重新运行 llm-wiki vector。');
+  }
+
+  if (!parsed || typeof parsed !== 'object' || !('version' in parsed) || parsed.version !== 2 ||
+    !('embeddings' in parsed) || !Array.isArray(parsed.embeddings)) {
     throw new Error('Wiki 向量索引格式错误，请重新运行 llm-wiki vector。');
   }
 
-  if (parsed.length === 0) {
+  const index = parsed as EmbeddingIndex;
+  if (index.embeddings.length === 0) {
     throw new Error('Wiki 向量索引中没有可检索的内容，请先运行 llm-wiki vector。');
   }
 
@@ -112,7 +146,7 @@ export async function searchWiki(question: string): Promise<WikiSearchResult[]> 
     throw new Error('未能生成可用于检索的问题向量。');
   }
 
-  const results = rankWikiEmbeddings(queryEmbedding.embedding, parsed as EmbeddingInfo[]);
+  const results = rankWikiEmbeddings(queryEmbedding.embedding, index.embeddings);
   if (results.length === 0) {
     throw new Error('Wiki 向量索引中没有可检索的内容，请先运行 llm-wiki vector。');
   }

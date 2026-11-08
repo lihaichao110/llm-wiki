@@ -15,3 +15,21 @@ export interface EmbeddingInfo {
   /** 原始 Markdown 文件名。 */
   file_name: string;
 }
+
+/** v2 索引中的片段向量，位置指向本片段新增正文的原始行。 */
+export interface ChunkEmbeddingInfo extends EmbeddingInfo {
+  /** 从概念标题到当前章节的标题路径。 */
+  section_path: string[];
+  /** 片段在概念文件中的零基序号。 */
+  position: number;
+  /** 新增正文在概念文件中的起始行。 */
+  start_line: number;
+  /** 新增正文在概念文件中的结束行。 */
+  end_line: number;
+}
+
+/** 向量索引的磁盘格式；版本字段用于阻止旧整篇索引参与片段检索。 */
+export interface EmbeddingIndex {
+  version: 2;
+  embeddings: ChunkEmbeddingInfo[];
+}

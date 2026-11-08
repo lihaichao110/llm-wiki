@@ -60,8 +60,8 @@ export OPENROUTER_API_KEY="<OpenRouter Access Token>"
 | `llm-wiki compile --force` | 忽略上次成功缓存，重新提取并合并全部资料。 |
 | `llm-wiki sync` | 检查现有资料、编译 Wiki，再完整更新向量索引。 |
 | `llm-wiki view` | 在浏览器中查看 `wiki/concepts/` 的概念关系图。 |
-| `llm-wiki vector` | 为 `wiki/concepts/` 中的内容生成向量，保存到 `.llmwiki/embedding.json`。 |
-| `llm-wiki query <question>` | 检索向量索引，并根据相关 Wiki 内容生成带来源的回答。 |
+| `llm-wiki vector` | 按章节和段落为 `wiki/concepts/` 生成片段向量，保存到 `.llmwiki/embedding.json`。 |
+| `llm-wiki query <question>` | 检索相关概念片段，并根据片段生成带概念文件来源的回答。 |
 | `llm-wiki --help` | 查看命令帮助。 |
 | `llm-wiki --version`、`llm-wiki -V` | 查看当前版本。 |
 

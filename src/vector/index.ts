@@ -5,7 +5,7 @@ import { splitMarkdown } from "./splitMarkdown";
 import { createEmbedding } from "./createEmbedding";
 import { Listr } from "listr2";
 import { saveEmbeddings } from "./saveEmbeddings";
-import type { EmbeddingInfo } from "@/types/embedding";
+import type { ChunkEmbeddingInfo } from "@/types/embedding";
 
 /** 本轮成功写入索引的概念文件与向量数量。 */
 export interface VectorResult {
@@ -41,7 +41,7 @@ export default async function initializeVectorStorage(): Promise<VectorResult> {
   console.log(chalk.green(`目录【wiki/concepts】扫描完成，可向量化文件数量：${markdownFiles.length}`));
 
   /** 按文件索引暂存成功结果，最终写盘顺序与扫描顺序一致。 */
-  const embeddingsByFile: (EmbeddingInfo[] | undefined)[] = new Array(markdownFiles.length);
+  const embeddingsByFile: (ChunkEmbeddingInfo[] | undefined)[] = new Array(markdownFiles.length);
   /** 记录文件失败原因；任务队列会继续处理其他 Markdown 文件。 */
   const processingErrors: Error[] = [];
   const embeddingTasks = new Listr(
@@ -52,9 +52,20 @@ export default async function initializeVectorStorage(): Promise<VectorResult> {
 
         try {
           const markdown = await readFile(join(conceptsDirectory, file.name), "utf8");
-          // 保留后期扩展为多分块向量化的切分入口。
-          const chunks = splitMarkdown(markdown);
-          const embeddingInfoList = await createEmbedding(chunks, file.name);
+          const chunks = splitMarkdown(markdown, file.name);
+          if (chunks.length === 0) throw new Error("概念文件中没有可检索的正文。");
+          const generated = await createEmbedding(chunks.map((chunk) => chunk.text), file.name);
+          if (generated.length !== chunks.length) {
+            throw new Error(`向量接口返回 ${generated.length} 条，预期 ${chunks.length} 条。`);
+          }
+          /** 向量响应与输入片段同序，附上原文件的稳定定位信息。 */
+          const embeddingInfoList: ChunkEmbeddingInfo[] = generated.map((item, index) => ({
+            ...item,
+            section_path: chunks[index].sectionPath,
+            position: chunks[index].position,
+            start_line: chunks[index].startLine,
+            end_line: chunks[index].endLine,
+          }));
           embeddingsByFile[fileIndex] = embeddingInfoList;
           task.title = `${file.name}  处理完成，生成 ${embeddingInfoList.length} 个向量`;
         } catch (error) {
